@@ -1,0 +1,15 @@
+---
+# Package sets per desktop environment. Selected by `desktop_env`.
+desktop_packages:
+  gnome:
+    - ubuntu-desktop-minimal
+    - gnome-session
+  xfce:
+    - xfce4
+    - xfce4-goodies
+
+# The session command xrdp launches for each desktop (consumed by the xrdp role
+# via the `desktop_session_command` fact set below).
+desktop_session_commands:
+  gnome: "gnome-session"
+  xfce: "startxfce4"

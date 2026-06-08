@@ -1,0 +1,26 @@
+#cloud-config
+# Minimal bootstrap so Ansible always has a foothold, on both cold-start
+# (base Ubuntu) and warm boots (from snapshot). Kept tiny on purpose — the
+# real configuration (GNOME, xrdp, fail2ban) is Ansible's job.
+users:
+  - name: ${username}
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    lock_passwd: false
+    ssh_authorized_keys:
+      - ${ssh_key}
+
+# Set the login/RDP password for the user. Plaintext here is acceptable because
+# cloud-init user_data is only readable by root on the instance, and the value
+# comes from a runtime-injected variable (never committed).
+chpasswd:
+  expire: false
+  users:
+    - name: ${username}
+      password: ${rdp_password}
+      type: text
+
+package_update: true
+packages:
+  - python3

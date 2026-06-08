@@ -1,0 +1,24 @@
+# Terraform state (per-server workspaces) and local artifacts
+terraform/.terraform/
+terraform/terraform.tfstate.d/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/.terraform.lock.hcl
+# Backend selector generated at init time by scripts/lib-config.sh (tf_init)
+terraform/backend_override.tf
+crash.log
+
+# Generated at runtime
+ansible/inventory/hosts.ini
+
+# Secrets / local overrides — NEVER commit
+*.tfvars
+.env
+*.pem
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+
+# Local Claude Code harness settings (not project code)
+.claude/

@@ -1,0 +1,31 @@
+# Per-server definition. The filename (without .yaml) is the server's name and
+# the unit of control: `./scripts/create.sh alice`, `./scripts/destroy.sh alice`.
+# Each server has its own isolated Terraform state and its own snapshot lineage,
+# so acting on one server can never affect another.
+#
+# Every field except `name` is OPTIONAL — anything omitted falls back to
+# config/defaults.yaml.
+server:
+  # Explicit server name. MUST match this file's name (alice.yaml -> alice).
+  # The filename remains authoritative; this field is self-documenting and is
+  # validated by the scripts to catch copy-paste mistakes (e.g. copying
+  # alice.yaml to bob.yaml without updating it).
+  name: alice
+
+  # Profile from config/profiles.yaml (overrides defaults.profile).
+  profile: medium
+
+  # Desktop override (gnome | xfce). Omit to use defaults.desktop_env (gnome).
+  # desktop_env: xfce
+
+  # Region override. Omit to use defaults.region (sin).
+  # region: sin
+
+  # Floating IP entry to attach (must match a key in config/floating_ip.yaml).
+  # Omit / set to null to use the server's ephemeral public IP instead.
+  floating_ip: main
+
+  # Optional free-form Ansible variable overrides passed to the playbook for
+  # THIS server only (merged over role defaults). Example:
+  # ansible_vars:
+  #   timezone: Asia/Karachi

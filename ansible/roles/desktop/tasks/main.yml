@@ -1,0 +1,26 @@
+---
+- name: Validate desktop_env
+  ansible.builtin.assert:
+    that: desktop_env in ['gnome', 'xfce']
+    fail_msg: "desktop_env must be 'gnome' or 'xfce', got '{{ desktop_env }}'"
+
+- name: Install selected desktop environment ({{ desktop_env }})
+  ansible.builtin.apt:
+    name: "{{ desktop_packages[desktop_env] }}"
+    state: present
+    update_cache: true
+  # GNOME pulls a lot of packages on a cold start; give it room.
+  async: 1800
+  poll: 30
+
+- name: Set default systemd target to graphical
+  ansible.builtin.command: systemctl set-default graphical.target
+  register: set_target
+  changed_when: "'Created symlink' in set_target.stderr or 'Created symlink' in set_target.stdout"
+
+- name: Install VS Code (Microsoft apt repo)
+  ansible.builtin.include_tasks: vscode.yml
+
+- name: Expose the chosen session command to later roles
+  ansible.builtin.set_fact:
+    desktop_session_command: "{{ desktop_session_commands[desktop_env] }}"

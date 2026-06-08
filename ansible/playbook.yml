@@ -1,0 +1,24 @@
+---
+# Configures a freshly-provisioned (or snapshot-restored) Ubuntu server into a
+# GNOME/XFCE desktop reachable over RDP, with security hardening. Idempotent:
+# safe to run on both a cold-start base image and a warm snapshot boot.
+#
+# Variables expected (passed by scripts/create.sh via -e / inventory):
+#   desktop_env       gnome | xfce            (from TF output)
+#   rdp_username      login user              (from TF output)
+#   rdp_password      desktop/RDP password    (from env: TF_VAR_rdp_password)
+#   slack_webhook_url Slack incoming webhook  (from env, optional)
+#   server_name       this server's name      (for Slack messages)
+- name: Configure on-demand cloud desktop
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    desktop_env: "{{ desktop_env | default('gnome') }}"
+
+  roles:
+    - role: common
+    - role: desktop
+    - role: xrdp
+    - role: security

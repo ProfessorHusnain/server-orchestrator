@@ -1,0 +1,35 @@
+---
+# Install VS Code from Microsoft's official apt repository (.deb channel).
+# Auto-updates with apt and registers in the GNOME/XFCE app menu for the RDP
+# desktop session. Idempotent — safe on both cold-start and snapshot boots.
+
+- name: Ensure apt HTTPS deps for the Microsoft repo
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - gpg
+    state: present
+    update_cache: true
+
+- name: Add Microsoft GPG key (dearmored)
+  ansible.builtin.get_url:
+    url: https://packages.microsoft.com/keys/microsoft.asc
+    dest: /tmp/microsoft.asc
+    mode: "0644"
+
+- name: Install Microsoft GPG key into keyrings
+  ansible.builtin.command:
+    cmd: gpg --dearmor --yes -o /usr/share/keyrings/microsoft-vscode.gpg /tmp/microsoft.asc
+    creates: /usr/share/keyrings/microsoft-vscode.gpg
+
+- name: Add the VS Code apt repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch={{ 'arm64' if architecture | default('x86') == 'arm' else 'amd64' }} signed-by=/usr/share/keyrings/microsoft-vscode.gpg] https://packages.microsoft.com/repos/code stable main"
+    filename: vscode
+    state: present
+    update_cache: true
+
+- name: Install VS Code
+  ansible.builtin.apt:
+    name: code
+    state: present

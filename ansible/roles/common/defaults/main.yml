@@ -1,0 +1,8 @@
+---
+timezone: Asia/Karachi
+base_packages:
+  - curl
+  - wget
+  - ca-certificates
+  - software-properties-common
+  - unzip

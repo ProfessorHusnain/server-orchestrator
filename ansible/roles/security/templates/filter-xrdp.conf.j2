@@ -1,0 +1,9 @@
+# {{ ansible_managed }}
+# fail2ban filter for xrdp authentication failures (read from the journal).
+[Definition]
+failregex = ^.*xrdp.*: .*(?:login failed|authentication failed).*(?:from|for).*<HOST>.*$
+            ^.*xrdp.*connection received.*<HOST>.*\n.*authentication failed.*$
+ignoreregex =
+
+[Init]
+journalmatch = _SYSTEMD_UNIT=xrdp.service

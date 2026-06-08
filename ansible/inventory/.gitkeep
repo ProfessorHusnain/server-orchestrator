@@ -1,0 +1,2 @@
+# The inventory file (hosts.ini) is generated at runtime by scripts/create.sh
+# from the Terraform output (rdp_ip + username). It is gitignored.

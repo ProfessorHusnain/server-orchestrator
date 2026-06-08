@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# Safely tear down a server: ./scripts/destroy.sh <server-name>
+#
+# Order is critical (never destroy before the snapshot is confirmed):
+#   1. create a snapshot of the running server (labeled server=<name>)
+#   2. VERIFY the snapshot reached status=available  (abort + alert on failure)
+#   3. prune this server's snapshots, keeping the newest N (config: snapshot_retention)
+#   4. detach the floating IP (NEVER delete it — it must survive teardown)
+#   5. terraform destroy the server
+#
+# Required env: HCLOUD_TOKEN, TF_VAR_ssh_public_key, TF_VAR_rdp_password
+# Optional env: SLACK_WEBHOOK_URL
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib-config.sh"
+
+SERVER="${1:?usage: destroy.sh <server-name>}"
+[[ -f "$CONFIG_DIR/servers/$SERVER.yaml" ]] || { echo "error: config/servers/$SERVER.yaml not found" >&2; exit 1; }
+validate_server_name "$SERVER"
+
+require_tools terraform curl jq python3
+require_env HCLOUD_TOKEN TF_VAR_ssh_public_key TF_VAR_rdp_password
+export TF_VAR_hcloud_token="$HCLOUD_TOKEN"
+export TF_VAR_server_name="$SERVER"
+
+RETENTION="$(yaml_get defaults.yaml "d['defaults']['snapshot_retention']")"
+
+cd "$TF_DIR"
+tf_init "$SERVER"
+SERVER_ID="$(terraform output -raw server_id)"
+
+notify_slack ":camera_with_flash: *${SERVER}*: snapshotting before destroy"
+
+# ---- 1. Create snapshot -----------------------------------------------------
+echo ">> Creating snapshot of server id=$SERVER_ID..."
+TS="$(date -u +%Y%m%d-%H%M%S)"
+CREATE_RESP="$(hapi POST "/servers/$SERVER_ID/actions/create_image" \
+  "$(printf '{"type":"snapshot","description":"%s-%s","labels":{"server":"%s","role":"desktop-state"}}' "$SERVER" "$TS" "$SERVER")")"
+SNAP_ID="$(echo "$CREATE_RESP" | jq -r '.image.id')"
+ACTION_ID="$(echo "$CREATE_RESP" | jq -r '.action.id')"
+[[ "$SNAP_ID" != "null" && -n "$SNAP_ID" ]] || { echo "error: snapshot create failed"; notify_slack ":x: *${SERVER}*: snapshot creation FAILED — destroy aborted"; exit 1; }
+
+# ---- 2. Verify snapshot became available ------------------------------------
+echo ">> Waiting for snapshot id=$SNAP_ID to become available..."
+for i in $(seq 1 120); do
+  STATUS="$(hapi GET "/images/$SNAP_ID" | jq -r '.image.status')"
+  ACT_STATUS="$(hapi GET "/actions/$ACTION_ID" | jq -r '.action.status')"
+  if [[ "$STATUS" == "available" && "$ACT_STATUS" == "success" ]]; then
+    echo ">> Snapshot available."
+    break
+  fi
+  if [[ "$ACT_STATUS" == "error" ]]; then
+    echo "error: snapshot action failed"; notify_slack ":x: *${SERVER}*: snapshot action errored — destroy aborted"; exit 1
+  fi
+  sleep 10
+done
+STATUS="$(hapi GET "/images/$SNAP_ID" | jq -r '.image.status')"
+[[ "$STATUS" == "available" ]] || { echo "error: snapshot not available (status=$STATUS)"; notify_slack ":x: *${SERVER}*: snapshot never became available — destroy aborted"; exit 1; }
+notify_slack ":floppy_disk: *${SERVER}*: snapshot \`${SNAP_ID}\` created & verified"
+
+# ---- 3. Prune snapshots, keep newest RETENTION -----------------------------
+echo ">> Pruning snapshots for '$SERVER', keeping newest $RETENTION..."
+OLD_IDS="$(hapi GET "/images?type=snapshot&label_selector=server%3D${SERVER}%2Crole%3Ddesktop-state&sort=created:desc" \
+  | jq -r --argjson keep "$RETENTION" '.images | map(select(.status=="available")) | .[$keep:] | .[].id')"
+for id in $OLD_IDS; do
+  echo "   deleting old snapshot id=$id"
+  hapi DELETE "/images/$id" >/dev/null
+done
+
+# ---- 4. Detach floating IP (do NOT delete) ----------------------------------
+FIP_REF="$(server_value "$SERVER" floating_ip floating_ip || true)"
+if [[ -n "$FIP_REF" ]]; then
+  FIP_NAME="$(yaml_get floating_ip.yaml "d['floating_ips']['$FIP_REF']['name']")"
+  FIP_ID="$(existing_fip_id "$FIP_NAME")"
+  if [[ -n "$FIP_ID" ]]; then
+    echo ">> Detaching floating IP id=$FIP_ID (kept, not deleted)..."
+    # Remove the assignment from Terraform state first so destroy won't try to
+    # reconcile it, then unassign via API so the IP persists independently.
+    terraform state rm 'hcloud_floating_ip_assignment.this[0]' 2>/dev/null || true
+    hapi POST "/floating_ips/$FIP_ID/actions/unassign" >/dev/null || true
+  fi
+fi
+
+# ---- 5. Destroy the server ---------------------------------------------------
+# Keep the floating IP resource out of destroy (it must survive). The assignment
+# is already removed from state; the created FIP (if any) is removed from state
+# too so terraform destroy only tears down the server, ssh key and firewall.
+terraform state rm 'hcloud_floating_ip.created[0]' 2>/dev/null || true
+terraform state rm 'data.hcloud_floating_ip.adopted[0]' 2>/dev/null || true
+
+echo ">> Destroying server '$SERVER'..."
+terraform destroy -input=false -auto-approve
+
+notify_slack ":wastebasket: *${SERVER}*: destroyed (snapshot \`${SNAP_ID}\` retained; floating IP kept)"
+echo ">> Done."

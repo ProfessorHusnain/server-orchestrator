@@ -1,0 +1,27 @@
+# Server profiles — maps a friendly name to a Hetzner Cloud server type.
+# A server (config/servers/<name>.yaml) selects one of these by `profile:`.
+# The GitHub Actions workflow (later phase) will also pick a profile from here.
+#
+# NOTE: ccx* (dedicated vCPU) types are only available in certain locations.
+#       Singapore (sin) supports the shared (cx*/cpx*) and dedicated (ccx*) lines.
+#
+# Optional per-profile `arch:` (x86 | arm). Defaults to defaults.architecture
+# (x86). Terraform asserts the profile arch matches the boot image arch, so an
+# ARM profile (e.g. cax*) paired with an x86 image fails fast instead of booting
+# an unbootable server. All current profiles are x86, so `arch:` is omitted.
+profiles:
+  light:
+    type: cx22
+    desc: "2 vCPU, 4 GB — daily browsing/coding"
+  medium:
+    type: cx42
+    desc: "8 vCPU, 16 GB — heavier dev work"
+  fast:
+    type: cpx42
+    desc: "8 vCPU, 16 GB AMD — compile-heavy"
+  heavy:
+    type: ccx33
+    desc: "8 vCPU, 32 GB dedicated — ML training"
+  monster:
+    type: ccx43
+    desc: "16 vCPU, 64 GB dedicated — big jobs"

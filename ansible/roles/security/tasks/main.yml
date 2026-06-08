@@ -1,0 +1,56 @@
+---
+- name: Install security packages
+  ansible.builtin.apt:
+    name:
+      - ufw
+      - fail2ban
+    state: present
+    update_cache: true
+
+# ---- UFW (in-host firewall) -------------------------------------------------
+- name: Allow required ports through UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: "{{ ufw_allowed_ports }}"
+
+- name: Enable UFW with default deny incoming
+  community.general.ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+
+# ---- fail2ban Slack ban-action ---------------------------------------------
+# A custom action that posts to Slack whenever fail2ban bans an IP. The webhook
+# URL is baked into the action file at provision time. If no webhook is set, we
+# skip installing the action so the jail uses the default (ban only, no Slack).
+- name: Install Slack ban-action for fail2ban
+  ansible.builtin.template:
+    src: action-slack.conf.j2
+    dest: /etc/fail2ban/action.d/slack-notify.conf
+    mode: "0644"
+  when: slack_webhook_url | length > 0
+  notify: Restart fail2ban
+
+- name: Configure fail2ban jail (SSH + RDP)
+  ansible.builtin.template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    mode: "0644"
+  notify: Restart fail2ban
+
+# xrdp logs auth failures to the systemd journal; provide a filter so fail2ban
+# can detect RDP brute-force attempts.
+- name: Install xrdp fail2ban filter
+  ansible.builtin.template:
+    src: filter-xrdp.conf.j2
+    dest: /etc/fail2ban/filter.d/xrdp.conf
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Enable and start fail2ban
+  ansible.builtin.systemd:
+    name: fail2ban
+    enabled: true
+    state: started

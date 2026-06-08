@@ -1,0 +1,21 @@
+# {{ ansible_managed }}
+[DEFAULT]
+bantime  = {{ fail2ban_bantime }}
+findtime = {{ fail2ban_findtime }}
+maxretry = {{ fail2ban_maxretry }}
+backend  = systemd
+{% if slack_webhook_url | length > 0 %}
+# Append the Slack notifier to the default ban action.
+action   = %(action_)s
+           slack-notify
+{% endif %}
+
+[sshd]
+enabled = true
+port    = 22
+
+[xrdp]
+enabled  = true
+port     = 3389
+filter   = xrdp
+backend  = systemd

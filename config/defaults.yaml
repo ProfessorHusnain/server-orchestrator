@@ -1,0 +1,36 @@
+# Global defaults applied to every server unless overridden in
+# config/servers/<name>.yaml. These are NON-SECRET declarations only.
+# Secrets (Hetzner token, SSH private key, Slack webhook, RDP password)
+# arrive at runtime via environment variables — never here.
+defaults:
+  # Hetzner location. sin = Singapore (closest region to Pakistan).
+  region: sin
+
+  # Default server profile (see config/profiles.yaml) when a server omits one.
+  profile: medium
+
+  # Desktop environment installed by Ansible. gnome (default) or xfce.
+  # Switching is a config change + ansible re-run, then snapshot to persist.
+  desktop_env: gnome
+
+  # Base OS image used ONLY on cold start (when no snapshot exists yet).
+  # Pinned to an LTS release so base-image drift never surprises a cold boot.
+  ubuntu_image: ubuntu-24.04
+
+  # CPU architecture for image lookups (x86 for cx*/cpx*/ccx* in sin).
+  architecture: x86
+
+  # How many snapshots to keep per server: latest + previous = 2.
+  # On destroy: snapshot -> verify -> prune to this many newest -> delete server.
+  snapshot_retention: 2
+
+  # Linux username created for SSH (Ansible) and used as the RDP login.
+  # The matching RDP password is injected at runtime via env var.
+  username: orchestrator
+
+  # Firewall: ports opened to the internet. Everything else is blocked.
+  #   22   -> SSH (Ansible)
+  #   3389 -> RDP (desktop)
+  # Optionally restrict RDP to known source CIDRs (default: anywhere).
+  allowed_ssh_cidrs: ["0.0.0.0/0", "::/0"]
+  allowed_rdp_cidrs: ["0.0.0.0/0", "::/0"]

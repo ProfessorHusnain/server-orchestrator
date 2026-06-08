@@ -1,0 +1,92 @@
+name: Orchestrate Desktop
+
+# Manual-only. Drives create/destroy of an on-demand Hetzner cloud desktop.
+# Infra that costs money is never triggered by push or schedule.
+on:
+  workflow_dispatch:
+    inputs:
+      server:
+        description: "Server name (must match config/servers/<server>.yaml)"
+        type: string
+        required: true
+        default: alice
+      action:
+        description: "What to do"
+        type: choice
+        required: true
+        options:
+          - create
+          - destroy
+      profile:
+        description: "Profile override for THIS run (blank = use committed config)"
+        type: choice
+        required: false
+        default: ""
+        options:
+          - ""
+          - light
+          - medium
+          - fast
+          - heavy
+          - monster
+
+# Serialize runs per server so create/destroy can't race on the same state.
+concurrency:
+  group: orchestrate-${{ inputs.server }}
+  cancel-in-progress: false
+
+jobs:
+  orchestrate:
+    runs-on: ubuntu-latest
+    # Optional: gate destructive/costly runs behind a protected Environment by
+    # uncommenting and creating a matching environment with required reviewers.
+    # environment: cloud-desktop
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Install tooling (ansible, jq, pyyaml)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ansible jq python3-yaml
+
+      - name: Write SSH key and derive public key
+        id: ssh
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_orchestrator
+          chmod 600 ~/.ssh/id_orchestrator
+          # Single source of truth: derive the public key from the private one.
+          ssh-keygen -y -f ~/.ssh/id_orchestrator > ~/.ssh/id_orchestrator.pub
+          echo "key_file=$HOME/.ssh/id_orchestrator" >> "$GITHUB_OUTPUT"
+
+      - name: Run ${{ inputs.action }} for ${{ inputs.server }}
+        env:
+          # Secrets (masked)
+          HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          # RDP password comes from a GitHub *variable* by design (plaintext).
+          TF_VAR_rdp_password: ${{ vars.RDP_PASSWORD }}
+          # SSH key wiring for Terraform + Ansible
+          SSH_PRIVATE_KEY_FILE: ${{ steps.ssh.outputs.key_file }}
+          # Ephemeral profile override (blank => scripts/Terraform use the config)
+          TF_VAR_profile_override: ${{ inputs.profile }}
+          # Remote Terraform state (S3-compatible). Per-server isolation is by
+          # state key; runners are ephemeral so state MUST be remote.
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          TF_STATE_ENDPOINT: ${{ vars.TF_STATE_ENDPOINT }}
+          TF_STATE_REGION: ${{ vars.TF_STATE_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          export TF_VAR_ssh_public_key="$(cat ~/.ssh/id_orchestrator.pub)"
+          chmod +x scripts/*.sh
+          ./scripts/${{ inputs.action }}.sh "${{ inputs.server }}"

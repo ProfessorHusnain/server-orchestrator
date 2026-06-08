@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+# fail2ban action: post a Slack alert when an IP is banned.
+[Definition]
+actionban = curl -s -X POST -H 'Content-type: application/json' \
+    --data '{"text":":no_entry: *fail2ban* banned `<ip>` on *{{ server_name }}* (jail: <name>, failures: <failures>)"}' \
+    '{{ slack_webhook_url }}'
+
+actionunban =
+actionstart =
+actionstop =
+actioncheck =

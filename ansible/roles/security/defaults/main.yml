@@ -1,0 +1,15 @@
+---
+# In-host firewall (defense-in-depth on top of the Hetzner cloud firewall).
+ufw_allowed_ports:
+  - 22
+  - 3389
+
+# fail2ban tuning for RDP/SSH brute-force protection.
+fail2ban_bantime: 3600      # seconds a banned IP stays blocked
+fail2ban_findtime: 600      # window to count failures within
+fail2ban_maxretry: 5        # failures before a ban
+
+# Slack webhook for ban alerts. Empty disables Slack notification (ban still
+# happens). Provided at runtime from env.
+slack_webhook_url: "{{ slack_webhook_url | default('') }}"
+server_name: "{{ server_name | default('unknown') }}"

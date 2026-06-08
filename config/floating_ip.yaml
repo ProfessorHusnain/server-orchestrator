@@ -1,0 +1,36 @@
+# Floating IP — fully dynamic and config-driven.
+#
+# A floating IP gives you a STABLE address to RDP into, so your saved
+# connection keeps working across destroy/restore cycles even though each
+# new server gets a fresh ephemeral IP.
+#
+# Each named entry below either ADOPTS an existing Hetzner floating IP or
+# CREATES its own lazily on first use. A server references an entry by name
+# via `floating_ip:` in its config (omit it to just use the ephemeral IP).
+#
+# Sharing is emergent, not enforced:
+#   - Multiple servers referencing the SAME entry  -> that one IP is reassigned
+#     between them (Hetzner attaches a floating IP to one server at a time).
+#   - Servers referencing DISTINCT entries          -> each gets its own IP.
+#
+# Lifecycle: floating IPs are NEVER auto-deleted on server destroy — they are
+# only detached, so the IP (and your saved RDP target) survives teardowns.
+floating_ips:
+  # Default shared entry. Created on first use; reused/reassigned thereafter.
+  main:
+    # mode: create | adopt
+    #   create -> create-if-missing (looked up by `name` label, else created)
+    #   adopt  -> use an already-existing Hetzner floating IP (must exist)
+    mode: create
+    type: ipv4
+    # Used as the floating IP's name AND its `fip-name` label for lookups.
+    name: orchestrator-main
+    # home_location: routing is optimized for this location. Match your region.
+    home_location: sin
+
+  # Example of adopting an IP you created by hand / outside this tool.
+  # Reference it from a server with `floating_ip: existing`.
+  # existing:
+  #   mode: adopt
+  #   type: ipv4
+  #   name: my-preexisting-ip      # looked up by name/label
