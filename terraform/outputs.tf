@@ -36,3 +36,8 @@ output "desktop_env" {
   description = "Desktop environment Ansible should configure."
   value       = local.desktop_env
 }
+
+output "architecture" {
+  description = "Effective CPU architecture (x86 | arm) for this server's profile. Ansible uses it to select the correct package arch (e.g. VS Code repo)."
+  value       = local.profile_arch
+}

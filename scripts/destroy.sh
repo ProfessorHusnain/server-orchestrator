@@ -24,11 +24,26 @@ require_env HCLOUD_TOKEN TF_VAR_ssh_public_key TF_VAR_rdp_password
 export TF_VAR_hcloud_token="$HCLOUD_TOKEN"
 export TF_VAR_server_name="$SERVER"
 
-RETENTION="$(yaml_get defaults.yaml "d['defaults']['snapshot_retention']")"
+RETENTION="$(yaml_get defaults.yaml defaults snapshot_retention)"
+# Guard the prune slice: retention MUST be an integer >= 1. A 0/empty/non-numeric
+# value would make `.[$keep:]` select every available snapshot (including the one
+# we are about to create) and delete the very backup this flow exists to protect.
+if ! [[ "$RETENTION" =~ ^[0-9]+$ ]] || [[ "$RETENTION" -lt 1 ]]; then
+  echo "error: snapshot_retention must be an integer >= 1 (got '$RETENTION')" >&2
+  exit 1
+fi
 
 cd "$TF_DIR"
 tf_init "$SERVER"
-SERVER_ID="$(terraform output -raw server_id)"
+# server_id is absent if state is empty (e.g. a re-run after a completed destroy).
+# `terraform output -raw` errors on a missing output; treat that as "nothing to
+# tear down" and exit cleanly rather than aborting with a raw terraform error.
+SERVER_ID="$(terraform output -raw server_id 2>/dev/null || true)"
+if [[ -z "$SERVER_ID" || "$SERVER_ID" == "null" ]]; then
+  echo ">> No server in state for '$SERVER' (already destroyed?). Nothing to do."
+  notify_slack ":information_source: *${SERVER}*: no server in state — already destroyed, nothing to do"
+  exit 0
+fi
 
 notify_slack ":camera_with_flash: *${SERVER}*: snapshotting before destroy"
 
@@ -42,26 +57,40 @@ ACTION_ID="$(echo "$CREATE_RESP" | jq -r '.action.id')"
 [[ "$SNAP_ID" != "null" && -n "$SNAP_ID" ]] || { echo "error: snapshot create failed"; notify_slack ":x: *${SERVER}*: snapshot creation FAILED — destroy aborted"; exit 1; }
 
 # ---- 2. Verify snapshot became available ------------------------------------
+# The create_image action is the authoritative completion signal (poll it, not
+# the image row, which can flip to "available" before the action finishes).
+# Require the action to reach success AND the image to read available before we
+# ever destroy the server. Anything else — error, or timeout — aborts.
 echo ">> Waiting for snapshot id=$SNAP_ID to become available..."
+VERIFIED=0
 for i in $(seq 1 120); do
-  STATUS="$(hapi GET "/images/$SNAP_ID" | jq -r '.image.status')"
-  ACT_STATUS="$(hapi GET "/actions/$ACTION_ID" | jq -r '.action.status')"
-  if [[ "$STATUS" == "available" && "$ACT_STATUS" == "success" ]]; then
-    echo ">> Snapshot available."
-    break
+  # A transient API blip during polling must not abort the whole destroy; an
+  # empty read just means "not ready yet" and we keep waiting.
+  ACT_STATUS="$(hapi GET "/actions/$ACTION_ID" 2>/dev/null | jq -r '.action.status' 2>/dev/null || true)"
+  if [[ "$ACT_STATUS" == "success" ]]; then
+    STATUS="$(hapi GET "/images/$SNAP_ID" 2>/dev/null | jq -r '.image.status' 2>/dev/null || true)"
+    if [[ "$STATUS" == "available" ]]; then
+      echo ">> Snapshot available."
+      VERIFIED=1
+      break
+    fi
   fi
   if [[ "$ACT_STATUS" == "error" ]]; then
     echo "error: snapshot action failed"; notify_slack ":x: *${SERVER}*: snapshot action errored — destroy aborted"; exit 1
   fi
   sleep 10
 done
-STATUS="$(hapi GET "/images/$SNAP_ID" | jq -r '.image.status')"
-[[ "$STATUS" == "available" ]] || { echo "error: snapshot not available (status=$STATUS)"; notify_slack ":x: *${SERVER}*: snapshot never became available — destroy aborted"; exit 1; }
+if [[ "$VERIFIED" -ne 1 ]]; then
+  echo "error: snapshot never reached action=success + image=available (last action=$ACT_STATUS)" >&2
+  notify_slack ":x: *${SERVER}*: snapshot never became available — destroy aborted"
+  exit 1
+fi
 notify_slack ":floppy_disk: *${SERVER}*: snapshot \`${SNAP_ID}\` created & verified"
 
 # ---- 3. Prune snapshots, keep newest RETENTION -----------------------------
 echo ">> Pruning snapshots for '$SERVER', keeping newest $RETENTION..."
-OLD_IDS="$(hapi GET "/images?type=snapshot&label_selector=server%3D${SERVER}%2Crole%3Ddesktop-state&sort=created:desc" \
+PRUNE_SEL="$(urlencode "$(snapshot_label_selector "$SERVER")")"
+OLD_IDS="$(hapi GET "/images?type=snapshot&label_selector=${PRUNE_SEL}&sort=created:desc" \
   | jq -r --argjson keep "$RETENTION" '.images | map(select(.status=="available")) | .[$keep:] | .[].id')"
 for id in $OLD_IDS; do
   echo "   deleting old snapshot id=$id"
@@ -71,7 +100,7 @@ done
 # ---- 4. Detach floating IP (do NOT delete) ----------------------------------
 FIP_REF="$(server_value "$SERVER" floating_ip floating_ip || true)"
 if [[ -n "$FIP_REF" ]]; then
-  FIP_NAME="$(yaml_get floating_ip.yaml "d['floating_ips']['$FIP_REF']['name']")"
+  FIP_NAME="$(yaml_get floating_ip.yaml floating_ips "$FIP_REF" name)"
   FIP_ID="$(existing_fip_id "$FIP_NAME")"
   if [[ -n "$FIP_ID" ]]; then
     echo ">> Detaching floating IP id=$FIP_ID (kept, not deleted)..."

@@ -51,18 +51,16 @@ resource "hcloud_floating_ip" "created" {
 }
 
 locals {
-  # The effective floating IP id to assign (adopted or freshly created), if any.
-  fip_id = local.fip_enabled ? (
-    var.existing_fip_id != "" ? data.hcloud_floating_ip.adopted[0].id : (
-      length(hcloud_floating_ip.created) > 0 ? hcloud_floating_ip.created[0].id : null
+  # Resolve the active floating IP ONCE (adopted IP, freshly created IP, or none),
+  # then project id/address from it so the selection logic isn't duplicated.
+  fip_source = !local.fip_enabled ? null : (
+    var.existing_fip_id != "" ? data.hcloud_floating_ip.adopted[0] : (
+      length(hcloud_floating_ip.created) > 0 ? hcloud_floating_ip.created[0] : null
     )
-  ) : null
+  )
 
-  fip_address = local.fip_enabled ? (
-    var.existing_fip_id != "" ? data.hcloud_floating_ip.adopted[0].ip_address : (
-      length(hcloud_floating_ip.created) > 0 ? hcloud_floating_ip.created[0].ip_address : null
-    )
-  ) : null
+  fip_id      = local.fip_source != null ? local.fip_source.id : null
+  fip_address = local.fip_source != null ? local.fip_source.ip_address : null
 }
 
 # Attach the resolved floating IP to this server. Using a separate assignment

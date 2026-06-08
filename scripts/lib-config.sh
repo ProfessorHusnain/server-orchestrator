@@ -78,20 +78,46 @@ EOF
 }
 
 # ---- Config reading (via python yaml; falls back to error if absent) --------
-# yaml_get <file> <python-expr-on-`d`>   e.g. yaml_get defaults.yaml "d['defaults']['region']"
+# yaml_get <file> <key> [<key> ...]
+#   Traverses the nested mapping by the given keys and prints the value.
+#   Keys are passed as data (argv), never eval'd, so arbitrary config values
+#   (including ones with quotes) can't inject code or break parsing.
+#   e.g. yaml_get defaults.yaml defaults region
+#        yaml_get floating_ip.yaml floating_ips "$FIP_REF" name
 yaml_get() {
-  local file="$1" expr="$2"
-  python3 -c "import yaml,sys; d=yaml.safe_load(open(sys.argv[1])); print(eval(sys.argv[2]))" \
-    "$CONFIG_DIR/$file" "$expr"
+  local file="$1"; shift
+  python3 - "$CONFIG_DIR/$file" "$@" <<'PY'
+import yaml, sys
+path = sys.argv[1]
+keys = sys.argv[2:]
+d = yaml.safe_load(open(path))
+cur = d
+for k in keys:
+    try:
+        cur = cur[k]
+    except (KeyError, TypeError, IndexError):
+        sys.stderr.write(
+            f"error: {path}: no value at key path {' -> '.join(keys)} "
+            f"(missing '{k}')\n")
+        sys.exit(1)
+print("" if cur is None else cur)
+PY
 }
 
 # Assert the server file's `name:` field matches the filename (filename is
 # authoritative). Missing `name:` is allowed (back-compat); a mismatch is fatal.
+# A missing or empty `server:` block is also tolerated here (treated as no
+# declared name); other consumers that genuinely need the block error on their own.
 validate_server_name() {
   local server="$1"
   local declared
-  declared="$(python3 -c "import yaml,sys; print(yaml.safe_load(open(sys.argv[1]))['server'].get('name',''))" \
-    "$CONFIG_DIR/servers/$server.yaml")"
+  declared="$(python3 - "$CONFIG_DIR/servers/$server.yaml" <<'PY'
+import yaml, sys
+doc = yaml.safe_load(open(sys.argv[1])) or {}
+srv = doc.get("server") or {}
+print(srv.get("name", "") if isinstance(srv, dict) else "")
+PY
+)"
   if [[ -n "$declared" && "$declared" != "$server" ]]; then
     echo "error: config/servers/$server.yaml declares name: '$declared' but the filename is '$server'." >&2
     echo "       The filename is authoritative — fix the 'name:' field to '$server'." >&2
@@ -106,14 +132,20 @@ server_value() {
   python3 - "$CONFIG_DIR" "$server" "$key" "$default_key" <<'PY'
 import yaml, sys
 cfgdir, server, key, dkey = sys.argv[1:5]
-s = yaml.safe_load(open(f"{cfgdir}/servers/{server}.yaml"))["server"]
-d = yaml.safe_load(open(f"{cfgdir}/defaults.yaml"))["defaults"]
-val = s.get(key, d.get(dkey))
+s = (yaml.safe_load(open(f"{cfgdir}/servers/{server}.yaml")) or {}).get("server") or {}
+d = (yaml.safe_load(open(f"{cfgdir}/defaults.yaml")) or {}).get("defaults") or {}
+val = s.get(key, d.get(dkey)) if isinstance(s, dict) else d.get(dkey)
 print("" if val is None else val)
 PY
 }
 
 # ---- Hetzner API ------------------------------------------------------------
+# URL-encode a string for safe use in a query value (e.g. a label value that
+# may contain spaces or selector metacharacters like , = & ).
+urlencode() {
+  python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$1"
+}
+
 hapi() { # hapi <method> <path> [data]
   local method="$1" path="$2" data="${3:-}"
   if [[ -n "$data" ]]; then
@@ -124,16 +156,25 @@ hapi() { # hapi <method> <path> [data]
   fi
 }
 
+# Snapshot label selector (single source of truth for create/list/prune).
+# server=<name>,role=desktop-state — ties snapshots to one server.
+snapshot_label_selector() {
+  local server="$1"
+  printf 'server=%s,role=desktop-state' "$server"
+}
+
 # Newest available snapshot ID for a server, or empty.
 latest_snapshot_id() {
   local server="$1"
-  hapi GET "/images?type=snapshot&label_selector=server%3D${server}%2Crole%3Ddesktop-state&sort=created:desc" \
+  local sel; sel="$(urlencode "$(snapshot_label_selector "$server")")"
+  hapi GET "/images?type=snapshot&label_selector=${sel}&sort=created:desc" \
     | jq -r '.images | map(select(.status=="available")) | .[0].id // empty'
 }
 
 # Existing floating IP ID for a named entry (looked up by its fip-name label), or empty.
 existing_fip_id() {
   local fip_name="$1"
-  hapi GET "/floating_ips?label_selector=fip-name%3D${fip_name}" \
+  local sel; sel="$(urlencode "fip-name=${fip_name}")"
+  hapi GET "/floating_ips?label_selector=${sel}" \
     | jq -r '.floating_ips[0].id // empty'
 }
