@@ -10,6 +10,8 @@
 #
 # Required env: HCLOUD_TOKEN, TF_VAR_ssh_public_key, TF_VAR_rdp_password
 # Optional env: SLACK_WEBHOOK_URL
+#               FLOATING_IP_MODE  ephemeral (default) | from-config
+#                 Must match the value used in the corresponding create run.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -23,6 +25,7 @@ require_tools terraform curl jq python3
 require_env HCLOUD_TOKEN TF_VAR_ssh_public_key TF_VAR_rdp_password
 export TF_VAR_hcloud_token="$HCLOUD_TOKEN"
 export TF_VAR_server_name="$SERVER"
+export TF_VAR_floating_ip_mode="${FLOATING_IP_MODE:-ephemeral}"
 
 RETENTION="$(yaml_get defaults.yaml defaults snapshot_retention)"
 # Guard the prune slice: retention MUST be an integer >= 1. A 0/empty/non-numeric
@@ -51,7 +54,8 @@ notify_slack ":camera_with_flash: *${SERVER}*: snapshotting before destroy"
 echo ">> Creating snapshot of server id=$SERVER_ID..."
 TS="$(date -u +%Y%m%d-%H%M%S)"
 CREATE_RESP="$(hapi POST "/servers/$SERVER_ID/actions/create_image" \
-  "$(printf '{"type":"snapshot","description":"%s-%s","labels":{"server":"%s","role":"desktop-state"}}' "$SERVER" "$TS" "$SERVER")")"
+  "$(jq -cn --arg server "$SERVER" --arg ts "$TS" \
+    '{type:"snapshot",description:($server+"-"+$ts),labels:{server:$server,"role":"desktop-state"}}')")"
 SNAP_ID="$(echo "$CREATE_RESP" | jq -r '.image.id')"
 ACTION_ID="$(echo "$CREATE_RESP" | jq -r '.action.id')"
 [[ "$SNAP_ID" != "null" && -n "$SNAP_ID" ]] || { echo "error: snapshot create failed"; notify_slack ":x: *${SERVER}*: snapshot creation FAILED — destroy aborted"; exit 1; }
@@ -88,27 +92,36 @@ fi
 notify_slack ":floppy_disk: *${SERVER}*: snapshot \`${SNAP_ID}\` created & verified"
 
 # ---- 3. Prune snapshots, keep newest RETENTION -----------------------------
+# The just-created snapshot ($SNAP_ID) is excluded by ID before the retention
+# slice, so a sub-second API clock skew can never cause it to be deleted here.
 echo ">> Pruning snapshots for '$SERVER', keeping newest $RETENTION..."
 PRUNE_SEL="$(urlencode "$(snapshot_label_selector "$SERVER")")"
 OLD_IDS="$(hapi GET "/images?type=snapshot&label_selector=${PRUNE_SEL}&sort=created:desc" \
-  | jq -r --argjson keep "$RETENTION" '.images | map(select(.status=="available")) | .[$keep:] | .[].id')"
+  | jq -r --argjson keep "$RETENTION" --argjson new_id "$SNAP_ID" \
+    '.images | map(select(.status=="available" and .id != $new_id)) | .[$keep:] | .[].id')"
 for id in $OLD_IDS; do
   echo "   deleting old snapshot id=$id"
   hapi DELETE "/images/$id" >/dev/null
 done
 
 # ---- 4. Detach floating IP (do NOT delete) ----------------------------------
-FIP_REF="$(server_value "$SERVER" floating_ip floating_ip || true)"
-if [[ -n "$FIP_REF" ]]; then
-  FIP_NAME="$(yaml_get floating_ip.yaml floating_ips "$FIP_REF" name)"
-  FIP_ID="$(existing_fip_id "$FIP_NAME")"
-  if [[ -n "$FIP_ID" ]]; then
-    echo ">> Detaching floating IP id=$FIP_ID (kept, not deleted)..."
-    # Remove the assignment from Terraform state first so destroy won't try to
-    # reconcile it, then unassign via API so the IP persists independently.
-    terraform state rm 'hcloud_floating_ip_assignment.this[0]' 2>/dev/null || true
-    hapi POST "/floating_ips/$FIP_ID/actions/unassign" >/dev/null || true
+# Only attempt if this run used a floating IP (FLOATING_IP_MODE=from-config).
+# If the server was created in ephemeral mode there is no FIP in state.
+if [[ "${FLOATING_IP_MODE:-ephemeral}" == "from-config" ]]; then
+  FIP_REF="$(server_value "$SERVER" floating_ip floating_ip || true)"
+  if [[ -n "$FIP_REF" ]]; then
+    FIP_NAME="$(yaml_get floating_ip.yaml floating_ips "$FIP_REF" name)"
+    FIP_ID="$(existing_fip_id "$FIP_NAME")"
+    if [[ -n "$FIP_ID" ]]; then
+      echo ">> Detaching floating IP id=$FIP_ID (kept, not deleted)..."
+      # Remove the assignment from Terraform state first so destroy won't try to
+      # reconcile it, then unassign via API so the IP persists independently.
+      terraform state rm 'hcloud_floating_ip_assignment.this[0]' 2>/dev/null || true
+      hapi POST "/floating_ips/$FIP_ID/actions/unassign" >/dev/null || true
+    fi
   fi
+else
+  echo ">> Floating IP mode=ephemeral — no FIP to detach"
 fi
 
 # ---- 5. Destroy the server ---------------------------------------------------

@@ -11,6 +11,9 @@
 # Required env: HCLOUD_TOKEN, TF_VAR_ssh_public_key, TF_VAR_rdp_password,
 #               SSH_PRIVATE_KEY_FILE (path to the matching private key)
 # Optional env: SLACK_WEBHOOK_URL
+#               FLOATING_IP_MODE  ephemeral (default) | from-config
+#                 ephemeral   -> server uses its own public IP; no FIP attached
+#                 from-config -> honour floating_ip: from the server's YAML
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -54,13 +57,23 @@ else
 fi
 
 # ---- Resolve floating IP (adopt existing if present) ------------------------
-FIP_REF="$(server_value "$SERVER" floating_ip floating_ip || true)"
+# FLOATING_IP_MODE (set by the workflow dispatch input, default "ephemeral"):
+#   ephemeral   -> skip the FIP entirely for this run, regardless of server config
+#   from-config -> honour whatever floating_ip: the server YAML declares
+export TF_VAR_floating_ip_mode="${FLOATING_IP_MODE:-ephemeral}"
 export TF_VAR_existing_fip_id=""
-if [[ -n "$FIP_REF" ]]; then
-  FIP_NAME="$(yaml_get floating_ip.yaml floating_ips "$FIP_REF" name)"
-  EXISTING_FIP="$(existing_fip_id "$FIP_NAME")"
-  export TF_VAR_existing_fip_id="${EXISTING_FIP:-}"
-  echo ">> Floating IP entry '$FIP_REF' (name=$FIP_NAME) existing_id='${EXISTING_FIP:-<none>}'"
+if [[ "${FLOATING_IP_MODE:-ephemeral}" == "from-config" ]]; then
+  FIP_REF="$(server_value "$SERVER" floating_ip floating_ip || true)"
+  if [[ -n "$FIP_REF" ]]; then
+    FIP_NAME="$(yaml_get floating_ip.yaml floating_ips "$FIP_REF" name)"
+    EXISTING_FIP="$(existing_fip_id "$FIP_NAME")"
+    export TF_VAR_existing_fip_id="${EXISTING_FIP:-}"
+    echo ">> Floating IP entry '$FIP_REF' (name=$FIP_NAME) existing_id='${EXISTING_FIP:-<none>}'"
+  else
+    echo ">> Floating IP mode=from-config but server '$SERVER' has no floating_ip: in config — using ephemeral"
+  fi
+else
+  echo ">> Floating IP mode=ephemeral — server will use its own public IP for this run"
 fi
 
 # ---- Terraform (per-server isolated state: S3 key or local workspace) -------
@@ -97,15 +110,17 @@ if [[ "$SSH_READY" -ne 1 ]]; then
 fi
 
 # ---- Configure with Ansible -------------------------------------------------
-# The git SSH private key is passed via the ENVIRONMENT (read by the git role
-# with lookup('env',...)), never on the command line, so it doesn't leak into
-# the process list or `ps` output. Name/email/flag are non-secret -> -e is fine.
+# Secrets are passed via the ENVIRONMENT, never on the command line, so they
+# don't leak into the process list or `ps` output:
+#   GIT_SSH_PRIVATE_KEY  -> read by the git role with lookup('env',...)
+#   RDP_PASSWORD         -> read by the xrdp role with lookup('env',...)
+# Non-secret values (desktop_env, username, flags) go through -e as usual.
 cd "$ANSIBLE_DIR"
 GIT_SSH_PRIVATE_KEY="${GIT_SSH_PRIVATE_KEY:-}" \
+RDP_PASSWORD="${TF_VAR_rdp_password}" \
 ansible-playbook playbook.yml \
   -e "desktop_env=$DESKTOP_ENV" \
   -e "rdp_username=$USERNAME" \
-  -e "rdp_password=$TF_VAR_rdp_password" \
   -e "server_name=$SERVER" \
   -e "architecture=$ARCHITECTURE" \
   -e "git_ssh=$GIT_SSH" \

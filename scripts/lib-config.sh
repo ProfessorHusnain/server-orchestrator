@@ -52,6 +52,14 @@ tf_init() {
   local override="$TF_DIR/backend_override.tf"
   if [[ -n "${TF_STATE_BUCKET:-}" ]]; then
     require_env TF_STATE_ENDPOINT AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+    # Guard: bucket, endpoint, region, and server name are interpolated directly
+    # into an HCL string literal. A '"' or '\' in any value would break the
+    # generated .tf file. Restrict to a safe charset before writing.
+    local _safe='^[a-zA-Z0-9_./:@-]+$'
+    [[ "${TF_STATE_BUCKET}"           =~ $_safe ]] || { echo "error: TF_STATE_BUCKET contains characters unsafe for HCL ('\"', '\\', spaces etc.)" >&2; exit 1; }
+    [[ "${TF_STATE_ENDPOINT}"         =~ $_safe ]] || { echo "error: TF_STATE_ENDPOINT contains characters unsafe for HCL" >&2; exit 1; }
+    [[ "${TF_STATE_REGION:-auto}"     =~ $_safe ]] || { echo "error: TF_STATE_REGION contains characters unsafe for HCL" >&2; exit 1; }
+    [[ "$server"                      =~ $_safe ]] || { echo "error: server name '$server' contains characters unsafe for HCL" >&2; exit 1; }
     # Generate an S3 backend keyed per-server (isolation via distinct key).
     cat > "$override" <<EOF
 terraform {

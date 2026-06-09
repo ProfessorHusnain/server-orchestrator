@@ -8,7 +8,7 @@ locals {
   defaults    = yamldecode(file("${var.config_dir}/defaults.yaml")).defaults
   profiles    = yamldecode(file("${var.config_dir}/profiles.yaml")).profiles
   fip_entries = yamldecode(file("${var.config_dir}/floating_ip.yaml")).floating_ips
-  server_cfg  = yamldecode(file("${var.config_dir}/servers/${var.server_name}.yaml")).server
+  server_cfg  = try(yamldecode(file("${var.config_dir}/servers/${var.server_name}.yaml")).server, {})
 
   # ---- Effective per-server settings (server file overrides defaults) -------
   # Precedence: ephemeral CI override (var.profile_override) > server file > defaults.
@@ -32,8 +32,12 @@ locals {
 
   # ---- Floating IP resolution ----------------------------------------------
   # A server may reference a named entry in floating_ip.yaml, or none.
+  # fip_enabled is false when either:
+  #   - var.floating_ip_mode == "ephemeral" (run-time override, default), OR
+  #   - the server YAML has no floating_ip: entry
+  # This ensures no FIP resource is created/adopted in Hetzner on ephemeral runs.
   fip_ref     = try(local.server_cfg.floating_ip, null)
-  fip_enabled = local.fip_ref != null
+  fip_enabled = var.floating_ip_mode == "from-config" && local.fip_ref != null
   fip_cfg     = local.fip_enabled ? local.fip_entries[local.fip_ref] : null
   # create = create-if-missing (managed by us); adopt = use a pre-existing IP.
   fip_mode = local.fip_enabled ? try(local.fip_cfg.mode, "create") : null

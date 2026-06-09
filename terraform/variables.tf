@@ -35,3 +35,14 @@ variable "profile_override" {
   type        = string
   default     = ""
 }
+
+variable "floating_ip_mode" {
+  description = "Floating IP mode for this run: 'ephemeral' = no FIP at all (server uses its own public IP); 'from-config' = honour the floating_ip: entry in the server YAML. Set by FLOATING_IP_MODE env var via create.sh. Default: ephemeral."
+  type        = string
+  default     = "ephemeral"
+
+  validation {
+    condition     = contains(["ephemeral", "from-config"], var.floating_ip_mode)
+    error_message = "floating_ip_mode must be 'ephemeral' or 'from-config'."
+  }
+}

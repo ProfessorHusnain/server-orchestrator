@@ -29,6 +29,14 @@ on:
           - fast
           - heavy
           - monster
+      floating_ip:
+        description: "Floating IP mode for THIS run"
+        type: choice
+        required: false
+        default: "ephemeral"
+        options:
+          - ephemeral
+          - from-config
 
 # Serialize runs per server so create/destroy can't race on the same state.
 concurrency:
@@ -68,11 +76,19 @@ jobs:
           echo "key_file=$HOME/.ssh/id_orchestrator" >> "$GITHUB_OUTPUT"
 
       - name: Run ${{ inputs.action }} for ${{ inputs.server }}
+        id: orchestrate
         env:
+          # Action and server are passed via env vars, NOT via ${{ }} inside the
+          # shell body — that prevents GitHub Actions expression injection, where
+          # template substitution happens before the shell parses the string.
+          ACTION: ${{ inputs.action }}
+          SERVER: ${{ inputs.server }}
           # Secrets (masked)
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          # RDP password comes from a GitHub *variable* by design (plaintext).
+          # RDP password — passed via env so it never appears on the ansible-playbook
+          # command line (would be visible in /proc/<pid>/cmdline and `ps`).
+          RDP_PASSWORD: ${{ vars.RDP_PASSWORD }}
           TF_VAR_rdp_password: ${{ vars.RDP_PASSWORD }}
           # SSH key wiring for Terraform + Ansible
           SSH_PRIVATE_KEY_FILE: ${{ steps.ssh.outputs.key_file }}
@@ -83,6 +99,10 @@ jobs:
           GIT_SSH_PRIVATE_KEY: ${{ secrets.GIT_SSH_PRIVATE_KEY }}
           # Ephemeral profile override (blank => scripts/Terraform use the config)
           TF_VAR_profile_override: ${{ inputs.profile }}
+          # Floating IP mode for this run:
+          #   ephemeral   -> force no floating IP regardless of server config
+          #   from-config -> use whatever floating_ip: the server YAML declares
+          FLOATING_IP_MODE: ${{ inputs.floating_ip }}
           # Remote Terraform state (S3-compatible). Per-server isolation is by
           # state key; runners are ephemeral so state MUST be remote.
           TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
@@ -94,4 +114,25 @@ jobs:
           set -euo pipefail
           export TF_VAR_ssh_public_key="$(cat ~/.ssh/id_orchestrator.pub)"
           chmod +x scripts/*.sh
-          ./scripts/${{ inputs.action }}.sh "${{ inputs.server }}"
+          "./scripts/${ACTION}.sh" "$SERVER"
+
+      - name: Job summary
+        if: always()
+        env:
+          ACTION: ${{ inputs.action }}
+          SERVER: ${{ inputs.server }}
+          PROFILE: ${{ inputs.profile }}
+          FLOATING_IP_MODE: ${{ inputs.floating_ip }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          {
+            echo "## Orchestration run summary"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Server | \`${SERVER}\` |"
+            echo "| Action | \`${ACTION}\` |"
+            echo "| Profile override | \`${PROFILE:-<from config>}\` |"
+            echo "| Floating IP mode | \`${FLOATING_IP_MODE}\` |"
+            echo "| Result | ${JOB_STATUS} |"
+          } >> "$GITHUB_STEP_SUMMARY"

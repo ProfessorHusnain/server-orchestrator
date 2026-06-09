@@ -29,7 +29,7 @@ server:
   # When true, create.sh requires GIT_USER_NAME, GIT_USER_EMAIL (GitHub vars) and
   # GIT_SSH_PRIVATE_KEY (a GitHub secret); the desktop gets a global git identity
   # and an ssh-agent-loaded key so `git push`/`pull` to GitHub works on login.
-  # git_ssh: true
+  git_ssh: true
 
   # Optional free-form Ansible variable overrides passed to the playbook for
   # THIS server only (merged over role defaults). Example:

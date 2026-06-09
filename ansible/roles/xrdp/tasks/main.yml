@@ -1,10 +1,14 @@
 ---
+- name: Read the RDP password from the environment
+  ansible.builtin.set_fact:
+    rdp_password: "{{ lookup('env', 'RDP_PASSWORD') }}"
+  no_log: true
+
 - name: Require an RDP password
   ansible.builtin.assert:
     that:
-      - rdp_password is defined
       - rdp_password | length > 0
-    fail_msg: "rdp_password must be provided (injected from env at runtime)."
+    fail_msg: "RDP_PASSWORD env var must be set (injected by create.sh from TF_VAR_rdp_password)."
 
 - name: Install xrdp
   ansible.builtin.apt:

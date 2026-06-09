@@ -17,10 +17,8 @@ notify_slack() {
     "$SLACK_WEBHOOK_URL" >/dev/null || echo "warn: Slack notify failed" >&2
 }
 
-# Minimal JSON string escaper (quotes the value, escapes \ and ").
+# JSON string escaper — delegates to Python's json.dumps so all RFC 8259
+# control characters (newlines, tabs, carriage returns, etc.) are handled.
 json_escape() {
-  local s="$1"
-  s="${s//\\/\\\\}"
-  s="${s//\"/\\\"}"
-  printf '"%s"' "$s"
+  python3 -c "import json,sys; print(json.dumps(sys.argv[1]))" "$1"
 }
