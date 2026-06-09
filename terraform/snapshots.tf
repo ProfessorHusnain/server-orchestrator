@@ -19,18 +19,22 @@ data "hcloud_image" "base" {
   count             = var.snapshot_image_id == "" ? 1 : 0
   name              = local.ubuntu_image
   with_architecture = local.architecture
+}
 
-  # Architecture guard: the profile's required arch must match the image arch we
-  # boot from. Trips before provisioning if e.g. an ARM (cax*) profile is paired
-  # with an x86 image, instead of booting an unbootable server with a cryptic error.
-  lifecycle {
-    postcondition {
-      condition     = self.architecture == local.profile_arch
-      error_message = "Architecture mismatch: profile '${local.profile_name}' requires '${local.profile_arch}' but base image '${local.ubuntu_image}' is '${self.architecture}'. Set the profile's arch or the image to match."
-    }
-  }
+# Warm-boot snapshot, looked up by id only when one is provided. Used solely to
+# read its architecture for the guard below; the actual boot uses the id directly.
+data "hcloud_image" "snapshot" {
+  count = var.snapshot_image_id != "" ? 1 : 0
+  id    = var.snapshot_image_id
 }
 
 locals {
   boot_image_id = var.snapshot_image_id != "" ? var.snapshot_image_id : data.hcloud_image.base[0].id
+
+  # Architecture of whichever image we are about to boot from — base on cold
+  # start, snapshot on warm boot. Single value the guard (server precondition in
+  # main.tf) checks on BOTH paths so a mismatch trips before provisioning.
+  boot_image_arch = var.snapshot_image_id != "" ? data.hcloud_image.snapshot[0].architecture : data.hcloud_image.base[0].architecture
+
+  boot_image_desc = var.snapshot_image_id != "" ? "snapshot id ${var.snapshot_image_id}" : "base image '${local.ubuntu_image}'"
 }

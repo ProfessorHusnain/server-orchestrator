@@ -57,5 +57,16 @@ resource "hcloud_server" "this" {
   # because state lives in snapshots, not on the live disk identity.
   lifecycle {
     ignore_changes = [ssh_keys, image]
+
+    # Architecture guard, evaluated on BOTH cold start and warm (snapshot) boot:
+    # the profile's required arch must match the arch of the image we boot from.
+    # Trips before provisioning if e.g. an ARM (cax*) profile is paired with an
+    # x86 image/snapshot, instead of booting an unbootable server. (A data-source
+    # postcondition would only cover the cold-start path; this covers both because
+    # the server resource exists in every plan.)
+    precondition {
+      condition     = local.boot_image_arch == local.profile_arch
+      error_message = "Architecture mismatch: profile '${local.profile_name}' requires '${local.profile_arch}' but ${local.boot_image_desc} is '${local.boot_image_arch}'. Set the profile's arch or the image/snapshot to match."
+    }
   }
 }

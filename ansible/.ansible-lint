@@ -1,0 +1,6 @@
+# ansible-lint configuration.
+# The GitHub SSH host-key blobs in roles/git/vars/main.yml are single,
+# unwrappable tokens that exceed the default 160-char line limit. Skip the
+# yaml line-length sub-rule rather than corrupt the keys by splitting them.
+skip_list:
+  - yaml[line-length]

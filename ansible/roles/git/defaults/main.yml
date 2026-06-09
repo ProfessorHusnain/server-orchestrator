@@ -1,0 +1,14 @@
+---
+# Git-over-SSH configuration. Gated by `git_ssh` (per-server flag, default false
+# from config/defaults.yaml). All values are injected at runtime by
+# scripts/create.sh from GitHub Actions vars/secrets — never committed.
+git_ssh: "{{ git_ssh | default(false) }}"
+git_user_name: "{{ git_user_name | default('') }}"
+git_user_email: "{{ git_user_email | default('') }}"
+
+# The login user whose git identity + SSH key we configure (same account used
+# for RDP/SSH). Defaults to the orchestrator user.
+git_user: "{{ rdp_username | default('orchestrator') }}"
+
+# Filename for the installed git SSH key under the user's ~/.ssh.
+git_ssh_key_name: id_git

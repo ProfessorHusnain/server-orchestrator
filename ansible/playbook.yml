@@ -9,6 +9,10 @@
 #   rdp_password      desktop/RDP password    (from env: TF_VAR_rdp_password)
 #   slack_webhook_url Slack incoming webhook  (from env, optional)
 #   server_name       this server's name      (for Slack messages)
+#   git_ssh           configure git over SSH  (per-server flag, default false)
+#   git_user_name     git global user.name    (from env: GIT_USER_NAME)
+#   git_user_email    git global user.email   (from env: GIT_USER_EMAIL)
+#   GIT_SSH_PRIVATE_KEY  git deploy key, read from the ENV by the git role
 - name: Configure on-demand cloud desktop
   hosts: all
   become: true
@@ -16,9 +20,11 @@
 
   vars:
     desktop_env: "{{ desktop_env | default('gnome') }}"
+    git_ssh: "{{ git_ssh | default(false) }}"
 
   roles:
     - role: common
     - role: desktop
     - role: xrdp
     - role: security
+    - role: git

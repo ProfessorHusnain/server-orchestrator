@@ -76,6 +76,11 @@ jobs:
           TF_VAR_rdp_password: ${{ vars.RDP_PASSWORD }}
           # SSH key wiring for Terraform + Ansible
           SSH_PRIVATE_KEY_FILE: ${{ steps.ssh.outputs.key_file }}
+          # Git-over-SSH (only consumed when a server sets git_ssh: true).
+          # Identity from GitHub *variables*; the deploy key from a *secret*.
+          GIT_USER_NAME: ${{ vars.GIT_USER_NAME }}
+          GIT_USER_EMAIL: ${{ vars.GIT_USER_EMAIL }}
+          GIT_SSH_PRIVATE_KEY: ${{ secrets.GIT_SSH_PRIVATE_KEY }}
           # Ephemeral profile override (blank => scripts/Terraform use the config)
           TF_VAR_profile_override: ${{ inputs.profile }}
           # Remote Terraform state (S3-compatible). Per-server isolation is by

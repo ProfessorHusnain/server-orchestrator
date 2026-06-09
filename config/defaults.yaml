@@ -34,3 +34,11 @@ defaults:
   # Optionally restrict RDP to known source CIDRs (default: anywhere).
   allowed_ssh_cidrs: ["0.0.0.0/0", "::/0"]
   allowed_rdp_cidrs: ["0.0.0.0/0", "::/0"]
+
+  # Git over SSH. When true (set per-server in config/servers/<name>.yaml),
+  # the desktop is configured for git push/pull over SSH to GitHub:
+  #   - global user.name / user.email from runtime env (GitHub Actions vars)
+  #   - the git SSH private key (a GitHub secret) is installed for the user
+  #   - ssh-agent auto-loads the key on login so `git` "just works"
+  # The name/email and key are NEVER stored in config — injected at runtime.
+  git_ssh: false

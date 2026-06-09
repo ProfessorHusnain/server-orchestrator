@@ -21,6 +21,9 @@
 - name: Install VS Code (Microsoft apt repo)
   ansible.builtin.include_tasks: vscode.yml
 
+- name: Install Google Chrome (Google apt repo)
+  ansible.builtin.include_tasks: chrome.yml
+
 - name: Expose the chosen session command to later roles
   ansible.builtin.set_fact:
     desktop_session_command: "{{ desktop_session_commands[desktop_env] }}"

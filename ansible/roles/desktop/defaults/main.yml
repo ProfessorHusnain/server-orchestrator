@@ -1,4 +1,9 @@
 ---
+# CPU architecture of the target host (x86 | arm). Passed by scripts/create.sh
+# from the Terraform `architecture` output; defaulted here so a direct
+# playbook run (without -e architecture=...) still resolves to the common case.
+architecture: x86
+
 # Package sets per desktop environment. Selected by `desktop_env`.
 desktop_packages:
   gnome:
