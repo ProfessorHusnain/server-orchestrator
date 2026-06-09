@@ -139,6 +139,16 @@ print("" if val is None else val)
 PY
 }
 
+# True if the argument is a truthy flag value. server_value renders a YAML
+# boolean via Python's str() (True/False), so accept those alongside the usual
+# yes/on/1 spellings. Anything else (incl. empty / False) is false.
+truthy() {
+  case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+    true|yes|on|1) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # ---- Hetzner API ------------------------------------------------------------
 # URL-encode a string for safe use in a query value (e.g. a label value that
 # may contain spaces or selector metacharacters like , = & ).

@@ -1,0 +1,116 @@
+---
+# Configure git over SSH for the desktop user, gated by the per-server `git_ssh`
+# flag. When enabled:
+#   - install git
+#   - set the global user.name / user.email (from runtime env)
+#   - install the git SSH private key (a GitHub secret, read from the env so it
+#     never appears on a command line) at ~/.ssh/<key> with strict perms
+#   - point github.com at that key via ~/.ssh/config and pre-seed known_hosts
+#   - auto-start ssh-agent and load the key on interactive login
+# Idempotent and safe on both cold-start and snapshot boots.
+
+- name: Skip git setup unless enabled
+  ansible.builtin.meta: end_role
+  when: not (git_ssh | bool)
+
+- name: Read the git SSH private key from the environment
+  ansible.builtin.set_fact:
+    _git_ssh_private_key: "{{ lookup('env', 'GIT_SSH_PRIVATE_KEY') }}"
+  no_log: true
+
+- name: Require git identity and SSH key when git_ssh is enabled
+  ansible.builtin.assert:
+    that:
+      - git_user_name | length > 0
+      - git_user_email | length > 0
+      - _git_ssh_private_key | length > 0
+    fail_msg: >-
+      git_ssh is enabled but git_user_name / git_user_email / GIT_SSH_PRIVATE_KEY
+      are not all set (injected by create.sh from GitHub vars/secrets).
+
+- name: Install git and ssh-agent tooling
+  ansible.builtin.apt:
+    name:
+      - git
+      - openssh-client
+    state: present
+    update_cache: true
+
+- name: Resolve the user's home directory
+  ansible.builtin.set_fact:
+    _git_home: "/home/{{ git_user }}"
+
+- name: Ensure ~/.ssh exists with strict perms
+  ansible.builtin.file:
+    path: "{{ _git_home }}/.ssh"
+    state: directory
+    owner: "{{ git_user }}"
+    group: "{{ git_user }}"
+    mode: "0700"
+
+- name: Install the git SSH private key
+  ansible.builtin.copy:
+    content: "{{ _git_ssh_private_key }}{{ '' if _git_ssh_private_key.endswith('\n') else '\n' }}"
+    dest: "{{ _git_home }}/.ssh/{{ git_ssh_key_name }}"
+    owner: "{{ git_user }}"
+    group: "{{ git_user }}"
+    mode: "0600"
+  no_log: true
+
+- name: Configure ~/.ssh/config to use the key for github.com
+  ansible.builtin.blockinfile:
+    path: "{{ _git_home }}/.ssh/config"
+    create: true
+    owner: "{{ git_user }}"
+    group: "{{ git_user }}"
+    mode: "0600"
+    marker: "# {mark} ANSIBLE MANAGED — github git key"
+    block: |
+      Host github.com
+        HostName github.com
+        User git
+        IdentityFile ~/.ssh/{{ git_ssh_key_name }}
+        IdentitiesOnly yes
+
+- name: Pre-seed GitHub host keys into known_hosts (avoid first-connect prompt)
+  ansible.builtin.known_hosts:
+    path: "{{ _git_home }}/.ssh/known_hosts"
+    name: github.com
+    key: "{{ item }}"
+    state: present
+  loop: "{{ git_github_known_hosts }}"
+  become: true
+  become_user: "{{ git_user }}"
+
+- name: Set global git user.name
+  community.general.git_config:
+    name: user.name
+    scope: global
+    value: "{{ git_user_name }}"
+  become: true
+  become_user: "{{ git_user }}"
+
+- name: Set global git user.email
+  community.general.git_config:
+    name: user.email
+    scope: global
+    value: "{{ git_user_email }}"
+  become: true
+  become_user: "{{ git_user }}"
+
+- name: Auto-start ssh-agent and load the git key on interactive login
+  ansible.builtin.blockinfile:
+    path: "{{ _git_home }}/.bashrc"
+    create: true
+    owner: "{{ git_user }}"
+    group: "{{ git_user }}"
+    mode: "0644"
+    marker: "# {mark} ANSIBLE MANAGED — ssh-agent for git"
+    block: |
+      # Start an ssh-agent for interactive shells and load the git key once.
+      if [ -z "${SSH_AUTH_SOCK:-}" ] && command -v ssh-agent >/dev/null 2>&1; then
+        eval "$(ssh-agent -s)" >/dev/null
+      fi
+      if [ -f "$HOME/.ssh/{{ git_ssh_key_name }}" ] && command -v ssh-add >/dev/null 2>&1; then
+        ssh-add -q "$HOME/.ssh/{{ git_ssh_key_name }}" 2>/dev/null || true
+      fi

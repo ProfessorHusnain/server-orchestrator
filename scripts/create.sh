@@ -26,6 +26,18 @@ require_env HCLOUD_TOKEN TF_VAR_ssh_public_key TF_VAR_rdp_password SSH_PRIVATE_K
 export TF_VAR_hcloud_token="$HCLOUD_TOKEN"
 export TF_VAR_server_name="$SERVER"
 
+# ---- Git-over-SSH (per-server flag) -----------------------------------------
+# If this server opts in (git_ssh: true), the git identity + SSH key must be
+# present in the environment BEFORE we spend money on cloud resources, so fail
+# fast here. The key is a GitHub secret; name/email are GitHub vars.
+GIT_SSH="$(server_value "$SERVER" git_ssh git_ssh || true)"
+if truthy "$GIT_SSH"; then
+  echo ">> git over SSH is ENABLED for '$SERVER'"
+  require_env GIT_USER_NAME GIT_USER_EMAIL GIT_SSH_PRIVATE_KEY
+else
+  echo ">> git over SSH is disabled for '$SERVER'"
+fi
+
 notify_slack ":hourglass_flowing_sand: *${SERVER}*: create started"
 
 # ---- Resolve boot source (snapshot vs cold start) ---------------------------
@@ -85,13 +97,20 @@ if [[ "$SSH_READY" -ne 1 ]]; then
 fi
 
 # ---- Configure with Ansible -------------------------------------------------
+# The git SSH private key is passed via the ENVIRONMENT (read by the git role
+# with lookup('env',...)), never on the command line, so it doesn't leak into
+# the process list or `ps` output. Name/email/flag are non-secret -> -e is fine.
 cd "$ANSIBLE_DIR"
+GIT_SSH_PRIVATE_KEY="${GIT_SSH_PRIVATE_KEY:-}" \
 ansible-playbook playbook.yml \
   -e "desktop_env=$DESKTOP_ENV" \
   -e "rdp_username=$USERNAME" \
   -e "rdp_password=$TF_VAR_rdp_password" \
   -e "server_name=$SERVER" \
   -e "architecture=$ARCHITECTURE" \
+  -e "git_ssh=$GIT_SSH" \
+  -e "git_user_name=${GIT_USER_NAME:-}" \
+  -e "git_user_email=${GIT_USER_EMAIL:-}" \
   -e "slack_webhook_url=${SLACK_WEBHOOK_URL:-}"
 
 echo ">> Done. RDP to $RDP_IP:3389 as '$USERNAME'."

@@ -1,0 +1,47 @@
+---
+# Install Google Chrome from Google's official apt repository (.deb channel).
+# Auto-updates with apt and registers in the GNOME/XFCE app menu for the RDP
+# desktop session. Idempotent — safe on both cold-start and snapshot boots.
+#
+# NOTE: Google Chrome ships amd64 only (no arm64 .deb). On an ARM host we install
+# Chromium instead so the desktop always has a working Chrome-compatible browser.
+
+- name: Ensure apt HTTPS deps for the Google repo
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - gpg
+    state: present
+    update_cache: true
+
+- name: Install Google Chrome (amd64 hosts)
+  when: architecture | default('x86') != 'arm'
+  block:
+    - name: Add Google GPG key (dearmored)
+      ansible.builtin.get_url:
+        url: https://dl.google.com/linux/linux_signing_key.pub
+        dest: /tmp/google-chrome.asc
+        mode: "0644"
+
+    - name: Install Google GPG key into keyrings
+      ansible.builtin.command:
+        cmd: gpg --dearmor --yes -o /usr/share/keyrings/google-chrome.gpg /tmp/google-chrome.asc
+        creates: /usr/share/keyrings/google-chrome.gpg
+
+    - name: Add the Google Chrome apt repository
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main"
+        filename: google-chrome
+        state: present
+        update_cache: true
+
+    - name: Install Google Chrome
+      ansible.builtin.apt:
+        name: google-chrome-stable
+        state: present
+
+- name: Install Chromium (arm hosts — no Chrome arm64 .deb exists)
+  ansible.builtin.apt:
+    name: chromium-browser
+    state: present
+  when: architecture | default('x86') == 'arm'
