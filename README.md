@@ -48,18 +48,15 @@ See [`config/README.md`](config/README.md). In short: pick a `profile`, optional
 ## Secrets — environment variables
 
 These are **never** committed. Provide them in your shell (local) or as GitHub
-variables/secrets (later):
+secrets/variables (CI):
 
 | Variable | Purpose |
 |----------|---------|
 | `HCLOUD_TOKEN` | Hetzner Cloud API token. |
 | `TF_VAR_ssh_public_key` | SSH **public** key contents (for Ansible access). |
 | `SSH_PRIVATE_KEY_FILE` | Path to the matching SSH **private** key file. |
-| `TF_VAR_rdp_password` | Desktop/RDP login password (from a GitHub **variable**). |
+| `TF_VAR_rdp_password` | Desktop/RDP login password. |
 | `SLACK_WEBHOOK_URL` | *(optional)* Slack incoming webhook for lifecycle + fail2ban alerts. |
-
-> Note: the RDP password is sourced from a GitHub **variable** (your choice).
-> GitHub variables are stored/displayed in plaintext, unlike secrets.
 
 ## Usage (local)
 
@@ -92,23 +89,51 @@ A manual workflow drives create/destroy: [.github/workflows/orchestrate.yml](.gi
 
 **Trigger:** `workflow_dispatch` (Actions tab → *Orchestrate Desktop* → *Run workflow*),
 with inputs:
-- **server** — name (must match `config/servers/<server>.yaml`)
-- **action** — `create` or `destroy`
-- **profile** — optional override for *this run only* (blank = use committed config);
-  applied ephemerally via `TF_VAR_profile_override`, nothing is committed.
+
+| Input | Options | Default | What it controls |
+|-------|---------|---------|-----------------|
+| `server` | free text | `alice` | Which server config to act on |
+| `action` | `create` / `destroy` | — | What to do |
+| `profile` | `light` / `medium` / `fast` / `heavy` / `monster` / blank | blank | Override server size for this run only; blank = use the YAML config |
+| `floating_ip` | `ephemeral` / `from-config` | `ephemeral` | `ephemeral` = server uses its own public IP only; `from-config` = attach the floating IP declared in the server's YAML |
 
 Runs are serialized per server (`concurrency`) so create/destroy can't race.
+After each run a **job summary** is written to the Actions UI showing the RDP
+address, username, and desktop environment (create runs only).
 
-### Required GitHub configuration
+### GitHub Secrets
 
-| Kind | Name | Purpose |
-|------|------|---------|
-| Secret | `HCLOUD_TOKEN` | Hetzner Cloud API token. |
-| Secret | `SSH_PRIVATE_KEY` | SSH private key; the public key is derived at runtime (`ssh-keygen -y`). |
-| Secret | `SLACK_WEBHOOK_URL` | *(optional)* Slack webhook for lifecycle + fail2ban alerts. |
-| **Variable** | `RDP_PASSWORD` | Desktop/RDP password (a GitHub **variable** by design — plaintext). |
-| Secret | `TF_STATE_ACCESS_KEY` / `TF_STATE_SECRET_KEY` | S3 bucket credentials (see below). |
-| Variable | `TF_STATE_BUCKET` / `TF_STATE_ENDPOINT` / `TF_STATE_REGION` | Remote state bucket config. |
+Go to **Settings → Secrets and variables → Actions → Secrets**.
+
+| Secret name | What it is | Required? |
+|-------------|------------|-----------|
+| `HCLOUD_TOKEN` | Hetzner Cloud API token (read/write) | **Always** |
+| `SSH_PRIVATE_KEY` | SSH private key the runner uses to reach the server (Ansible + SSH wait). The matching public key is derived from it automatically. | **Always** |
+| `TF_STATE_ACCESS_KEY` | S3-compatible object storage access key (for remote Terraform state) | **Always** |
+| `TF_STATE_SECRET_KEY` | S3-compatible object storage secret key | **Always** |
+| `SLACK_WEBHOOK_URL` | Incoming webhook URL for lifecycle notifications | Optional — omit to disable Slack |
+| `GIT_SSH_PRIVATE_KEY` | Git deploy key (GitHub SSH private key for the desktop user) | Only when a server has `git_ssh: true` |
+
+### GitHub Variables
+
+Go to **Settings → Secrets and variables → Actions → Variables**.
+These are non-secret and visible in logs — GitHub variables by design.
+
+| Variable name | What it is | Required? |
+|---------------|------------|-----------|
+| `RDP_USERNAME` | Linux username for SSH and RDP login. Defaults to `orchestrator` if not set. | Optional |
+| `RDP_PASSWORD` | Password for the desktop RDP login. Stored as a variable (not a secret) by design — it's a login password, not a key/token. | **Always** |
+| `TF_STATE_BUCKET` | S3-compatible bucket name holding Terraform state files | **Always** |
+| `TF_STATE_ENDPOINT` | S3 endpoint URL, e.g. `https://sin1.your-objectstorage.com` | **Always** |
+| `TF_STATE_REGION` | S3 region string, e.g. `sin` (defaults to `auto` if blank) | Optional |
+| `GIT_USER_NAME` | Full name set as `git config user.name` on the desktop | Only when a server has `git_ssh: true` |
+| `GIT_USER_EMAIL` | Email set as `git config user.email` on the desktop | Only when a server has `git_ssh: true` |
+
+#### Minimum setup (no Slack, no git-SSH)
+
+1. Secrets: `HCLOUD_TOKEN`, `SSH_PRIVATE_KEY`, `TF_STATE_ACCESS_KEY`, `TF_STATE_SECRET_KEY`
+2. Variables: `RDP_PASSWORD`, `TF_STATE_BUCKET`, `TF_STATE_ENDPOINT` — optionally `RDP_USERNAME` (defaults to `orchestrator`)
+3. Dispatch with `action=create`, `server=alice`, `floating_ip=ephemeral`
 
 ### Remote Terraform state (required for CI)
 

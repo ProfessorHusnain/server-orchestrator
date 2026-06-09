@@ -19,7 +19,7 @@ locals {
   desktop_env  = try(local.server_cfg.desktop_env, local.defaults.desktop_env)
   ubuntu_image = local.defaults.ubuntu_image
   architecture = local.defaults.architecture
-  username     = local.defaults.username
+  username     = var.rdp_username != "" ? var.rdp_username : local.defaults.username
 
   # Architecture the selected profile requires. Optional per-profile `arch:`
   # (e.g. for a future ARM/cax* profile), defaulting to the global architecture.

@@ -25,6 +25,7 @@ require_tools terraform curl jq python3
 require_env HCLOUD_TOKEN TF_VAR_ssh_public_key TF_VAR_rdp_password
 export TF_VAR_hcloud_token="$HCLOUD_TOKEN"
 export TF_VAR_server_name="$SERVER"
+export TF_VAR_rdp_username="${RDP_USERNAME:-orchestrator}"
 export TF_VAR_floating_ip_mode="${FLOATING_IP_MODE:-ephemeral}"
 
 RETENTION="$(yaml_get defaults.yaml defaults snapshot_retention)"

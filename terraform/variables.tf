@@ -18,6 +18,12 @@ variable "ssh_public_key" {
   type        = string
 }
 
+variable "rdp_username" {
+  description = "Linux username created for SSH and RDP login. Injected via TF_VAR_rdp_username (sourced from a GitHub variable at runtime). Defaults to 'orchestrator' if not set."
+  type        = string
+  default     = "orchestrator"
+}
+
 variable "rdp_password" {
   description = "Password for the RDP/desktop login. Injected via TF_VAR_rdp_password (sourced from a GitHub variable at runtime). Used by cloud-init to set the user's password so RDP works on first boot; Ansible reconciles it too."
   type        = string

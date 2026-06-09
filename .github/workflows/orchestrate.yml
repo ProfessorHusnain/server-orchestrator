@@ -86,8 +86,9 @@ jobs:
           # Secrets (masked)
           HCLOUD_TOKEN: ${{ secrets.HCLOUD_TOKEN }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          # RDP password — passed via env so it never appears on the ansible-playbook
-          # command line (would be visible in /proc/<pid>/cmdline and `ps`).
+          # RDP credentials — both passed via env (username as TF_VAR so Terraform
+          # picks it up; password kept out of the ansible-playbook command line).
+          RDP_USERNAME: ${{ vars.RDP_USERNAME }}
           RDP_PASSWORD: ${{ vars.RDP_PASSWORD }}
           TF_VAR_rdp_password: ${{ vars.RDP_PASSWORD }}
           # SSH key wiring for Terraform + Ansible

@@ -10,7 +10,7 @@
 #
 # Required env: HCLOUD_TOKEN, TF_VAR_ssh_public_key, TF_VAR_rdp_password,
 #               SSH_PRIVATE_KEY_FILE (path to the matching private key)
-# Optional env: SLACK_WEBHOOK_URL
+# Optional env: SLACK_WEBHOOK_URL, TF_VAR_rdp_username (default: orchestrator)
 #               FLOATING_IP_MODE  ephemeral (default) | from-config
 #                 ephemeral   -> server uses its own public IP; no FIP attached
 #                 from-config -> honour floating_ip: from the server's YAML
@@ -28,6 +28,8 @@ require_env HCLOUD_TOKEN TF_VAR_ssh_public_key TF_VAR_rdp_password SSH_PRIVATE_K
 # Terraform reads the token via TF_VAR_hcloud_token; mirror it from HCLOUD_TOKEN.
 export TF_VAR_hcloud_token="$HCLOUD_TOKEN"
 export TF_VAR_server_name="$SERVER"
+# Username defaults to 'orchestrator' if not supplied via GitHub variable.
+export TF_VAR_rdp_username="${RDP_USERNAME:-orchestrator}"
 
 # ---- Git-over-SSH (per-server flag) -----------------------------------------
 # If this server opts in (git_ssh: true), the git identity + SSH key must be
