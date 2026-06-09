@@ -27,8 +27,10 @@ locals {
   # before booting an unbootable server.
   profile_arch = try(local.profiles[local.profile_name].arch, local.architecture)
 
-  allowed_ssh_cidrs = local.defaults.allowed_ssh_cidrs
-  allowed_rdp_cidrs = local.defaults.allowed_rdp_cidrs
+  allowed_ssh_cidrs   = local.defaults.allowed_ssh_cidrs
+  allowed_rdp_cidrs   = local.defaults.allowed_rdp_cidrs
+  allowed_http_cidrs  = local.defaults.allowed_http_cidrs
+  allowed_https_cidrs = local.defaults.allowed_https_cidrs
 
   # ---- Floating IP resolution ----------------------------------------------
   # A server may reference a named entry in floating_ip.yaml, or none.

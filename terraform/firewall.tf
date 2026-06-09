@@ -21,6 +21,22 @@ resource "hcloud_firewall" "this" {
     description = "RDP (desktop)"
   }
 
+  rule {
+    direction   = "in"
+    protocol    = "tcp"
+    port        = "80"
+    source_ips  = local.allowed_http_cidrs
+    description = "HTTP"
+  }
+
+  rule {
+    direction   = "in"
+    protocol    = "tcp"
+    port        = "443"
+    source_ips  = local.allowed_https_cidrs
+    description = "HTTPS"
+  }
+
   # Allow ICMP (ping) for basic reachability checks.
   rule {
     direction   = "in"

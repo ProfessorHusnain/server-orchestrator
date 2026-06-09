@@ -31,9 +31,13 @@ defaults:
   # Firewall: ports opened to the internet. Everything else is blocked.
   #   22   -> SSH (Ansible)
   #   3389 -> RDP (desktop)
-  # Optionally restrict RDP to known source CIDRs (default: anywhere).
-  allowed_ssh_cidrs: ["0.0.0.0/0", "::/0"]
-  allowed_rdp_cidrs: ["0.0.0.0/0", "::/0"]
+  #   80   -> HTTP
+  #   443  -> HTTPS
+  # Optionally restrict any of these to known source CIDRs (default: anywhere).
+  allowed_ssh_cidrs:   ["0.0.0.0/0", "::/0"]
+  allowed_rdp_cidrs:   ["0.0.0.0/0", "::/0"]
+  allowed_http_cidrs:  ["0.0.0.0/0", "::/0"]
+  allowed_https_cidrs: ["0.0.0.0/0", "::/0"]
 
   # Git over SSH. When true (set per-server in config/servers/<name>.yaml),
   # the desktop is configured for git push/pull over SSH to GitHub:

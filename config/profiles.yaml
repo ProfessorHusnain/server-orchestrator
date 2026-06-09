@@ -14,8 +14,8 @@ profiles:
     type: cx22
     desc: "2 vCPU, 4 GB — daily browsing/coding"
   medium:
-    type: cx42
-    desc: "8 vCPU, 16 GB — heavier dev work"
+    type: cpx42
+    desc: "8 vCPU, 16 GB — heavier dev work (CPX Gen2 AMD EPYC)"
   fast:
     type: cpx42
     desc: "8 vCPU, 16 GB AMD — compile-heavy"
