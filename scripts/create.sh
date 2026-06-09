@@ -130,3 +130,9 @@ ansible-playbook playbook.yml \
 
 echo ">> Done. RDP to $RDP_IP:3389 as '$USERNAME'."
 notify_slack ":white_check_mark: *${SERVER}*: ready — RDP to \`${RDP_IP}:3389\` as \`${USERNAME}\` (${DESKTOP_ENV})"
+
+# Expose outputs for the GitHub Actions job summary (no-op outside CI).
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  printf 'rdp_ip=%s\nrdp_username=%s\ndesktop_env=%s\n' \
+    "$RDP_IP" "$USERNAME" "$DESKTOP_ENV" >> "$GITHUB_OUTPUT"
+fi

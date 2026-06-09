@@ -124,6 +124,9 @@ jobs:
           PROFILE: ${{ inputs.profile }}
           FLOATING_IP_MODE: ${{ inputs.floating_ip }}
           JOB_STATUS: ${{ job.status }}
+          RDP_IP: ${{ steps.orchestrate.outputs.rdp_ip }}
+          RDP_USERNAME: ${{ steps.orchestrate.outputs.rdp_username }}
+          DESKTOP_ENV: ${{ steps.orchestrate.outputs.desktop_env }}
         run: |
           {
             echo "## Orchestration run summary"
@@ -134,5 +137,10 @@ jobs:
             echo "| Action | \`${ACTION}\` |"
             echo "| Profile override | \`${PROFILE:-<from config>}\` |"
             echo "| Floating IP mode | \`${FLOATING_IP_MODE}\` |"
+            if [[ "${ACTION}" == "create" && -n "${RDP_IP:-}" ]]; then
+              echo "| RDP address | \`${RDP_IP}:3389\` |"
+              echo "| RDP username | \`${RDP_USERNAME}\` |"
+              echo "| Desktop | \`${DESKTOP_ENV}\` |"
+            fi
             echo "| Result | ${JOB_STATUS} |"
           } >> "$GITHUB_STEP_SUMMARY"
