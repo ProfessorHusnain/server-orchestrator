@@ -1,0 +1,12 @@
+---
+# Ansible Galaxy collection requirements.
+# Install with: ansible-galaxy collection install -r ansible/requirements.yml
+#
+# Pins community.general to a known-good version so the CI apt package
+# (which is unpinned and can vary by runner image) can't silently install
+# an incompatible version. The yaml callback removal in 12.0.0 was the
+# incident that motivated this file; ansible.cfg already uses the
+# built-in replacement (ansible.builtin.default + result_format=yaml).
+collections:
+  - name: community.general
+    version: ">=9.0.0"
