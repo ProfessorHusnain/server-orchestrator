@@ -92,6 +92,23 @@ if [[ "$VERIFIED" -ne 1 ]]; then
 fi
 notify_slack ":floppy_disk: *${SERVER}*: snapshot \`${SNAP_ID}\` created & verified"
 
+# ---- 2b. Tag new snapshot as latest, untag previous ------------------------
+# Strip latest=true from any existing snapshot for this server first, then
+# apply it to the new one. Analogous to Docker's :latest tag — always points
+# to the most recent verified snapshot for this server.
+PRUNE_SEL_TAG="$(urlencode "$(snapshot_label_selector "$SERVER")")"
+PREV_LATEST_IDS="$(hapi GET "/images?type=snapshot&label_selector=${PRUNE_SEL_TAG}%2Clatest%3Dtrue" \
+  | jq -r '.images[].id')"
+for id in $PREV_LATEST_IDS; do
+  hapi PUT "/images/$id" \
+    "$(jq -cn --arg server "$SERVER" \
+      '{"labels":{"server":$server,"role":"desktop-state","latest":"false"}}')" >/dev/null
+done
+hapi PUT "/images/$SNAP_ID" \
+  "$(jq -cn --arg server "$SERVER" \
+    '{"labels":{"server":$server,"role":"desktop-state","latest":"true"}}')" >/dev/null
+echo ">> Tagged snapshot $SNAP_ID as latest."
+
 # ---- 3. Prune snapshots, keep newest RETENTION -----------------------------
 # The just-created snapshot ($SNAP_ID) is excluded by ID before the retention
 # slice, so a sub-second API clock skew can never cause it to be deleted here.
