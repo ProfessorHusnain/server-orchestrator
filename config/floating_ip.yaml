@@ -26,7 +26,7 @@ floating_ips:
     # Used as the floating IP's name AND its `fip-name` label for lookups.
     name: orchestrator-main
     # home_location: routing is optimized for this location. Match your region.
-    home_location: sin
+    home_location: fsn1
 
   # Example of adopting an IP you created by hand / outside this tool.
   # Reference it from a server with `floating_ip: existing`.

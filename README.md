@@ -81,7 +81,10 @@ into the snapshot.
 
 ## Region
 
-Servers run in Hetzner **Singapore (`sin`)** — the closest region to Pakistan.
+Servers run in Hetzner **Falkenstein, Germany (`fsn1`)** — the cheapest Hetzner
+region (~$34/mo for cpx42 vs ~$76/mo in Singapore). Europe adds ~150ms RDP
+latency from Pakistan vs ~80ms for Singapore, but the cost saving is 50–120%
+depending on server size. Change `region:` in `config/defaults.yaml` to switch.
 
 ## GitHub Actions
 

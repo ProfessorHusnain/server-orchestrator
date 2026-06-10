@@ -3,8 +3,9 @@
 # Secrets (Hetzner token, SSH private key, Slack webhook, RDP password)
 # arrive at runtime via environment variables — never here.
 defaults:
-  # Hetzner location. sin = Singapore (closest region to Pakistan).
-  region: sin
+  # Hetzner location. fsn1 = Falkenstein, Germany (cheapest region).
+  # sin = Singapore was ~120% more expensive for the same hardware.
+  region: fsn1
 
   # Default server profile (see config/profiles.yaml) when a server omits one.
   profile: medium
