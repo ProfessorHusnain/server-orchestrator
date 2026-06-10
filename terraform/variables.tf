@@ -42,6 +42,12 @@ variable "profile_override" {
   default     = ""
 }
 
+variable "region_override" {
+  description = "Optional Hetzner location (fsn1/nbg1/hel1/ash/hil/sin) that wins over the server's committed config for THIS run only. Empty = use the config. Set ephemerally by CI from the dispatch input; never committed."
+  type        = string
+  default     = ""
+}
+
 variable "floating_ip_mode" {
   description = "Floating IP mode for this run: 'ephemeral' = no FIP at all (server uses its own public IP); 'from-config' = honour the floating_ip: entry in the server YAML. Set by FLOATING_IP_MODE env var via create.sh. Default: ephemeral."
   type        = string

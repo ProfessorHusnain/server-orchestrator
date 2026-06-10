@@ -37,6 +37,19 @@ on:
         options:
           - ephemeral
           - from-config
+      region:
+        description: "Region override for THIS run (blank = use committed config)"
+        type: choice
+        required: false
+        default: ""
+        options:
+          - ""
+          - fsn1
+          - nbg1
+          - hel1
+          - ash
+          - hil
+          - sin
 
 # Serialize runs per server so create/destroy can't race on the same state.
 concurrency:
@@ -107,6 +120,8 @@ jobs:
           #   ephemeral   -> force no floating IP regardless of server config
           #   from-config -> use whatever floating_ip: the server YAML declares
           FLOATING_IP_MODE: ${{ inputs.floating_ip }}
+          # Region override for this run (blank = use server's committed config).
+          TF_VAR_region_override: ${{ inputs.region }}
           # Remote Terraform state (S3-compatible). Per-server isolation is by
           # state key; runners are ephemeral so state MUST be remote.
           TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
@@ -126,6 +141,7 @@ jobs:
           ACTION: ${{ inputs.action }}
           SERVER: ${{ inputs.server }}
           PROFILE: ${{ inputs.profile }}
+          REGION_OVERRIDE: ${{ inputs.region }}
           FLOATING_IP_MODE: ${{ inputs.floating_ip }}
           JOB_STATUS: ${{ job.status }}
           RDP_IP: ${{ steps.orchestrate.outputs.rdp_ip }}
@@ -140,6 +156,7 @@ jobs:
             echo "| Server | \`${SERVER}\` |"
             echo "| Action | \`${ACTION}\` |"
             echo "| Profile override | \`${PROFILE:-<from config>}\` |"
+            echo "| Region override | \`${REGION_OVERRIDE:-<from config>}\` |"
             echo "| Floating IP mode | \`${FLOATING_IP_MODE}\` |"
             if [[ "${ACTION}" == "create" && -n "${RDP_IP:-}" ]]; then
               echo "| RDP address | \`${RDP_IP}:3389\` |"

@@ -15,7 +15,8 @@ locals {
   profile_name = var.profile_override != "" ? var.profile_override : try(local.server_cfg.profile, local.defaults.profile)
   server_type  = local.profiles[local.profile_name].type
 
-  region       = try(local.server_cfg.region, local.defaults.region)
+  # Precedence: CI dispatch override > server file > defaults.
+  region       = var.region_override != "" ? var.region_override : try(local.server_cfg.region, local.defaults.region)
   desktop_env  = try(local.server_cfg.desktop_env, local.defaults.desktop_env)
   ubuntu_image = local.defaults.ubuntu_image
   architecture = local.defaults.architecture
@@ -26,6 +27,10 @@ locals {
   # Compared against the base image arch in snapshots.tf to catch a mismatch
   # before booting an unbootable server.
   profile_arch = try(local.profiles[local.profile_name].arch, local.architecture)
+
+  # Regions where this profile's server type can be ordered. null = any region.
+  # Checked in main.tf precondition to fail fast instead of a mid-apply error.
+  profile_regions = try(local.profiles[local.profile_name].regions, null)
 
   allowed_ssh_cidrs   = local.defaults.allowed_ssh_cidrs
   allowed_rdp_cidrs   = local.defaults.allowed_rdp_cidrs

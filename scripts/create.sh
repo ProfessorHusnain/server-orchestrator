@@ -63,6 +63,7 @@ fi
 #   ephemeral   -> skip the FIP entirely for this run, regardless of server config
 #   from-config -> honour whatever floating_ip: the server YAML declares
 export TF_VAR_floating_ip_mode="${FLOATING_IP_MODE:-ephemeral}"
+export TF_VAR_region_override="${TF_VAR_region_override:-}"
 export TF_VAR_existing_fip_id=""
 if [[ "${FLOATING_IP_MODE:-ephemeral}" == "from-config" ]]; then
   FIP_REF="$(server_value "$SERVER" floating_ip floating_ip || true)"

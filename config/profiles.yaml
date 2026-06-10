@@ -2,30 +2,39 @@
 # A server (config/servers/<name>.yaml) selects one of these by `profile:`.
 # The GitHub Actions workflow dispatch also exposes these as choices.
 #
-# All profiles below are confirmed available in fsn1 (Falkenstein, DE).
 # CPX = shared AMD EPYC vCPU (cost-optimised). CCX = dedicated AMD EPYC vCPU.
+# CX  = shared Intel/AMD vCPU (cost-optimised, Gen3). CAX = shared ARM (Ampere).
 #
-# Optional per-profile `arch:` (x86 | arm). Defaults to defaults.architecture
-# (x86). Terraform asserts the profile arch matches the boot image arch, so an
-# ARM profile (cax*) paired with an x86 image fails fast instead of booting
-# an unbootable server. All current profiles are x86, so `arch:` is omitted.
+# Optional per-profile fields:
+#   arch:    x86 | arm  — defaults to defaults.architecture (x86). Terraform
+#            asserts the profile arch matches the boot image arch so an ARM
+#            profile (cax*) paired with an x86 image fails fast.
+#   regions: list of Hetzner locations where this server type can be ordered.
+#            Omit (or set to null) to allow any region — useful for types
+#            available everywhere. Terraform fails fast with a clear error if
+#            the server's region is not in this list, instead of letting
+#            Hetzner return a cryptic "unavailable" error mid-apply.
 #
-# fsn1 pricing (on-demand, excl. IPv4):
-#   light   cpx21  ~$13/mo
-#   medium  cpx42  ~$34/mo
-#   fast    cpx51  ~$96/mo
-#   heavy   ccx33  ~$84/mo
-#   monster ccx43 ~$169/mo
+# Hetzner locations: fsn1 (Falkenstein DE), nbg1 (Nuremberg DE),
+#   hel1 (Helsinki FI), ash (Ashburn US-E), hil (Hillsboro US-W), sin (Singapore)
+#
+# Pricing (on-demand, excl. IPv4, ~USD/mo as of 2026):
+#   light   cx33   ~$8    (fsn1/nbg1/hel1/ash/hil/sin)
+#   medium  cpx42  ~$30   (all regions)
+#   fast    cpx62  ~$59   (all regions)
+#   heavy   ccx33  ~$74   (all regions)
+#   monster ccx43  ~$147  (all regions)
 profiles:
   light:
-    type: cpx21
-    desc: "3 vCPU, 4 GB shared AMD — browsing / light work"
+    type: cx33
+    regions: [fsn1, nbg1, hel1, ash, hil, sin]
+    desc: "4 vCPU, 8 GB shared Intel/AMD — browsing / light work"
   medium:
     type: cpx42
     desc: "8 vCPU, 16 GB shared AMD EPYC Genoa — daily dev"
   fast:
-    type: cpx51
-    desc: "16 vCPU, 32 GB shared AMD EPYC — compile-heavy"
+    type: cpx62
+    desc: "16 vCPU, 32 GB shared AMD EPYC Genoa — compile-heavy"
   heavy:
     type: ccx33
     desc: "8 vCPU, 32 GB dedicated AMD EPYC — ML / heavy workloads"

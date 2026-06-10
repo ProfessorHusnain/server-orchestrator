@@ -18,8 +18,8 @@ server:
   # Desktop override (gnome | xfce). Omit to use defaults.desktop_env (gnome).
   # desktop_env: xfce
 
-  # Region override. Omit to use defaults.region (sin).
-  # region: sin
+  # Region override. Omit to use defaults.region (fsn1).
+  # region: nbg1
 
   # Floating IP entry to attach (must match a key in config/floating_ip.yaml).
   # Omit / set to null to use the server's ephemeral public IP instead.

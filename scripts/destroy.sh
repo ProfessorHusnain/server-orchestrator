@@ -27,6 +27,7 @@ export TF_VAR_hcloud_token="$HCLOUD_TOKEN"
 export TF_VAR_server_name="$SERVER"
 export TF_VAR_rdp_username="${RDP_USERNAME:-orchestrator}"
 export TF_VAR_floating_ip_mode="${FLOATING_IP_MODE:-ephemeral}"
+export TF_VAR_region_override="${TF_VAR_region_override:-}"
 
 RETENTION="$(yaml_get defaults.yaml defaults snapshot_retention)"
 # Guard the prune slice: retention MUST be an integer >= 1. A 0/empty/non-numeric

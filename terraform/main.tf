@@ -68,5 +68,13 @@ resource "hcloud_server" "this" {
       condition     = local.boot_image_arch == local.profile_arch
       error_message = "Architecture mismatch: profile '${local.profile_name}' requires '${local.profile_arch}' but ${local.boot_image_desc} is '${local.boot_image_arch}'. Set the profile's arch or the image/snapshot to match."
     }
+
+    # Region availability guard: fail fast if this profile's server type cannot
+    # be ordered in the selected region, instead of getting a cryptic Hetzner
+    # "unavailable" error mid-apply. null regions = available everywhere.
+    precondition {
+      condition     = local.profile_regions == null || contains(local.profile_regions, local.region)
+      error_message = "Profile '${local.profile_name}' (${local.server_type}) is not available in region '${local.region}'. Available regions: ${local.profile_regions != null ? join(", ", local.profile_regions) : "all"}. Change the server's region or choose a different profile."
+    }
   }
 }
