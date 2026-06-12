@@ -52,19 +52,26 @@
   notify: Restart xrdp
 
 # GNOME-over-xrdp quirk: polkit blocks login with "Authentication required to
-# create a color managed device" / network-manager prompts. These policy drops
-# silence those so the session starts cleanly. No-op for XFCE.
+# create a color managed device" / network-manager prompts. Ubuntu 24.04 uses
+# polkit rules.d (JavaScript format) — the legacy localauthority .pkla path
+# does not exist on 24.04 and causes a task failure.
+- name: Ensure polkit rules.d directory exists
+  ansible.builtin.file:
+    path: /etc/polkit-1/rules.d
+    state: directory
+    mode: "0755"
+  when: desktop_env == 'gnome'
+
 - name: Allow color-manager & network actions without auth prompt (GNOME/xrdp)
   ansible.builtin.copy:
-    dest: /etc/polkit-1/localauthority/50-local.d/45-allow-colord.pkla
+    dest: /etc/polkit-1/rules.d/45-allow-colord.rules
     mode: "0644"
     content: |
-      [Allow Colord all Users]
-      Identity=unix-user:*
-      Action=org.freedesktop.color-manager.create-device;org.freedesktop.color-manager.create-profile;org.freedesktop.color-manager.delete-device;org.freedesktop.color-manager.delete-profile;org.freedesktop.color-manager.modify-device;org.freedesktop.color-manager.modify-profile
-      ResultAny=no
-      ResultInactive=no
-      ResultActive=yes
+      polkit.addRule(function(action, subject) {
+          if (action.id.indexOf("org.freedesktop.color-manager.") === 0 && subject.isInGroup("sudo")) {
+              return polkit.Result.YES;
+          }
+      });
   when: desktop_env == 'gnome'
   notify: Restart xrdp
 
