@@ -33,5 +33,7 @@
   ansible.builtin.apt:
     name: code
     state: present
+    dpkg_options: "force-confdef,force-confold"
   environment:
     DEBIAN_FRONTEND: noninteractive
+    NEEDRESTART_MODE: "a"

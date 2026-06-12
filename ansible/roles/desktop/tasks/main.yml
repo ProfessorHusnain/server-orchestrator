@@ -4,16 +4,52 @@
     that: desktop_env in ['gnome', 'xfce']
     fail_msg: "desktop_env must be 'gnome' or 'xfce', got '{{ desktop_env }}'"
 
-- name: Install selected desktop environment ({{ desktop_env }})
+# Pre-seed lightdm as display manager BEFORE any desktop install.
+# Without this, dpkg prompts during install or gdm3 wins the DM selection,
+# causing the postinst to hang on a headless server.
+- name: Pre-seed lightdm as default display manager
+  ansible.builtin.debconf:
+    name: lightdm
+    question: shared/default-x-display-manager
+    value: lightdm
+    vtype: select
+
+- name: Write default display manager config
+  ansible.builtin.copy:
+    content: "/usr/sbin/lightdm\n"
+    dest: /etc/X11/default-display-manager
+    mode: "0644"
+
+# Mask gdm3 before the desktop install so its postinst script cannot start
+# the display manager service on this headless server (no GPU, no display).
+# This is the key step — DEBIAN_FRONTEND=noninteractive alone does not stop
+# gdm3 from attempting to start and hanging.
+- name: Mask gdm3 to prevent headless postinst hang
+  ansible.builtin.systemd:
+    name: gdm3
+    masked: true
+  ignore_errors: true
+
+- name: Install display manager (lightdm)
   ansible.builtin.apt:
-    name: "{{ desktop_packages[desktop_env] }}"
+    name:
+      - lightdm
+      - lightdm-gtk-greeter
     state: present
     update_cache: true
   environment:
     DEBIAN_FRONTEND: noninteractive
-  # Desktop pulls many packages on cold start; give it room.
-  # DEBIAN_FRONTEND=noninteractive prevents dpkg post-install scripts
-  # from hanging waiting on interactive prompts (e.g. GDM3 display manager).
+    NEEDRESTART_MODE: "a"
+
+- name: Install selected desktop environment ({{ desktop_env }})
+  ansible.builtin.apt:
+    name: "{{ desktop_packages[desktop_env] }}"
+    state: present
+    install_recommends: false
+    dpkg_options: "force-confdef,force-confold"
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    NEEDRESTART_MODE: "a"
   async: 1800
   poll: 30
 

@@ -125,6 +125,7 @@ These are non-secret and visible in logs — GitHub variables by design.
 | Variable name | What it is | Required? |
 |---------------|------------|-----------|
 | `RDP_USERNAME` | Linux username for SSH and RDP login. Defaults to `orchestrator` if not set. | Optional |
+| `DESKTOP_ENV` | Desktop environment: `gnome` or `xfce`. Overrides server YAML config when set. Defaults to `gnome` if blank. | Optional |
 | `RDP_PASSWORD` | Password for the desktop RDP login. Stored as a variable (not a secret) by design — it's a login password, not a key/token. | **Always** |
 | `TF_STATE_BUCKET` | S3-compatible bucket name holding Terraform state files | **Always** |
 | `TF_STATE_ENDPOINT` | S3 endpoint URL, e.g. `https://sin1.your-objectstorage.com` | **Always** |

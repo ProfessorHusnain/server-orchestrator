@@ -86,7 +86,9 @@ terraform apply -input=false -auto-approve
 
 RDP_IP="$(terraform output -raw rdp_ip)"
 USERNAME="$(terraform output -raw username)"
-DESKTOP_ENV="$(terraform output -raw desktop_env)"
+# GitHub variable DESKTOP_ENV_OVERRIDE wins over server YAML config.
+# Blank = fall through to whatever Terraform resolved from the server YAML.
+DESKTOP_ENV="${DESKTOP_ENV_OVERRIDE:-$(terraform output -raw desktop_env)}"
 ARCHITECTURE="$(terraform output -raw architecture)"
 
 # ---- Ansible inventory from outputs -----------------------------------------

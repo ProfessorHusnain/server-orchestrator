@@ -5,16 +5,26 @@
 architecture: x86
 
 # Package sets per desktop environment. Selected by `desktop_env`.
+#
+# GNOME: gnome-session-flashback is chosen over ubuntu-desktop-minimal because
+# it does NOT pull in gdm3. On a headless server gdm3's postinst tries to start
+# a display manager and hangs indefinitely. gnome-session-flashback gives a
+# fully functional GNOME panel session that works reliably over xrdp.
+#
+# XFCE: xfce4 + xfce4-goodies — the most xrdp-compatible desktop. Defaults to
+# Xorg (not Wayland), lightweight, fast to install (~3-5 min vs ~20 min GNOME).
 desktop_packages:
   gnome:
-    - ubuntu-desktop-minimal
-    - gnome-session
+    - gnome-session-flashback
+    - gnome-terminal
+    - nautilus
+    - gnome-control-center
   xfce:
     - xfce4
     - xfce4-goodies
 
 # The session command xrdp launches for each desktop (consumed by the xrdp role
-# via the `desktop_session_command` fact set below).
+# via the `desktop_session_command` fact set in tasks/main.yml).
 desktop_session_commands:
-  gnome: "gnome-session"
-  xfce: "startxfce4"
+  gnome: "gnome-session-flashback-metacity"
+  xfce: "xfce4-session"

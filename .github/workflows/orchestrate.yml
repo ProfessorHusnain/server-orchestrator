@@ -114,6 +114,9 @@ jobs:
           GIT_USER_NAME: ${{ vars.GIT_USER_NAME }}
           GIT_USER_EMAIL: ${{ vars.GIT_USER_EMAIL }}
           GIT_SSH_PRIVATE_KEY: ${{ secrets.GIT_SSH_PRIVATE_KEY }}
+          # Desktop environment override (blank => use server YAML or defaults.yaml).
+          # Sourced from GitHub variable DESKTOP_ENV (default: gnome).
+          DESKTOP_ENV_OVERRIDE: ${{ vars.DESKTOP_ENV }}
           # Ephemeral profile override (blank => scripts/Terraform use the config)
           TF_VAR_profile_override: ${{ inputs.profile }}
           # Floating IP mode for this run:

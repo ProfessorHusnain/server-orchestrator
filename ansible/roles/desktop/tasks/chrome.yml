@@ -39,8 +39,10 @@
       ansible.builtin.apt:
         name: google-chrome-stable
         state: present
+        dpkg_options: "force-confdef,force-confold"
       environment:
         DEBIAN_FRONTEND: noninteractive
+        NEEDRESTART_MODE: "a"
 
 - name: Install Chromium (arm hosts — no Chrome arm64 .deb exists)
   ansible.builtin.apt:
