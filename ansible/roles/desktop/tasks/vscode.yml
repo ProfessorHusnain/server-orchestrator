@@ -33,3 +33,5 @@
   ansible.builtin.apt:
     name: code
     state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive

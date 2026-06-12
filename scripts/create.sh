@@ -121,6 +121,7 @@ fi
 cd "$ANSIBLE_DIR"
 GIT_SSH_PRIVATE_KEY="${GIT_SSH_PRIVATE_KEY:-}" \
 RDP_PASSWORD="${TF_VAR_rdp_password}" \
+DEBIAN_FRONTEND=noninteractive \
 ansible-playbook playbook.yml \
   -e "desktop_env=$DESKTOP_ENV" \
   -e "rdp_username=$USERNAME" \

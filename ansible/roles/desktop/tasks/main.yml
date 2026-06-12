@@ -9,7 +9,11 @@
     name: "{{ desktop_packages[desktop_env] }}"
     state: present
     update_cache: true
-  # GNOME pulls a lot of packages on a cold start; give it room.
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  # Desktop pulls many packages on cold start; give it room.
+  # DEBIAN_FRONTEND=noninteractive prevents dpkg post-install scripts
+  # from hanging waiting on interactive prompts (e.g. GDM3 display manager).
   async: 1800
   poll: 30
 
