@@ -4,6 +4,32 @@
     that: desktop_env in ['gnome', 'xfce']
     fail_msg: "desktop_env must be 'gnome' or 'xfce', got '{{ desktop_env }}'"
 
+# Configure needrestart to auto-restart services without prompting.
+# needrestart ignores DEBIAN_FRONTEND=noninteractive (confirmed bug LP#1941716)
+# and blocks indefinitely waiting for input during ubuntu-desktop install.
+- name: Configure needrestart to auto-restart without prompting
+  ansible.builtin.copy:
+    dest: /etc/needrestart/conf.d/autorestart.conf
+    mode: "0644"
+    content: |
+      $nrconf{restart} = 'a';
+
+# Mask snapd BEFORE ubuntu-desktop install to prevent Firefox/Thunderbird snap
+# downloads from hanging the install. ubuntu-desktop Recommends both as snaps;
+# snapd downloads them in postinst with no timeout, causing 30+ min stalls at
+# 0% CPU. We install Firefox as a .deb from Mozilla PPA afterward instead.
+- name: Mask snapd to prevent snap download hang during install (GNOME)
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    masked: true
+    state: stopped
+  ignore_errors: true
+  loop:
+    - snapd
+    - snapd.socket
+    - snapd.seeded.service
+  when: desktop_env == 'gnome'
+
 # Pre-seed gdm3 display manager selection BEFORE desktop install to prevent
 # the interactive DM selection prompt from hanging the install.
 - name: Pre-seed gdm3 as default display manager (GNOME)
