@@ -29,6 +29,15 @@ on:
           - fast
           - heavy
           - monster
+      desktop:
+        description: "Desktop environment for THIS run (blank = use DESKTOP_ENV variable or server config)"
+        type: choice
+        required: false
+        default: ""
+        options:
+          - ""
+          - xfce
+          - gnome
       floating_ip:
         description: "Floating IP mode for THIS run"
         type: choice
@@ -114,9 +123,9 @@ jobs:
           GIT_USER_NAME: ${{ vars.GIT_USER_NAME }}
           GIT_USER_EMAIL: ${{ vars.GIT_USER_EMAIL }}
           GIT_SSH_PRIVATE_KEY: ${{ secrets.GIT_SSH_PRIVATE_KEY }}
-          # Desktop environment override (blank => use server YAML or defaults.yaml).
-          # Sourced from GitHub variable DESKTOP_ENV (default: gnome).
-          DESKTOP_ENV_OVERRIDE: ${{ vars.DESKTOP_ENV }}
+          # Desktop environment: dispatch input wins over GitHub variable, which
+          # wins over server YAML. Blank at both levels = use server/defaults config.
+          DESKTOP_ENV_OVERRIDE: ${{ inputs.desktop || vars.DESKTOP_ENV }}
           # Ephemeral profile override (blank => scripts/Terraform use the config)
           TF_VAR_profile_override: ${{ inputs.profile }}
           # Floating IP mode for this run:
@@ -144,6 +153,7 @@ jobs:
           ACTION: ${{ inputs.action }}
           SERVER: ${{ inputs.server }}
           PROFILE: ${{ inputs.profile }}
+          DESKTOP_INPUT: ${{ inputs.desktop }}
           REGION_OVERRIDE: ${{ inputs.region }}
           FLOATING_IP_MODE: ${{ inputs.floating_ip }}
           JOB_STATUS: ${{ job.status }}
@@ -159,6 +169,7 @@ jobs:
             echo "| Server | \`${SERVER}\` |"
             echo "| Action | \`${ACTION}\` |"
             echo "| Profile override | \`${PROFILE:-<from config>}\` |"
+            echo "| Desktop override | \`${DESKTOP_INPUT:-<from config>}\` |"
             echo "| Region override | \`${REGION_OVERRIDE:-<from config>}\` |"
             echo "| Floating IP mode | \`${FLOATING_IP_MODE}\` |"
             if [[ "${ACTION}" == "create" && -n "${RDP_IP:-}" ]]; then
