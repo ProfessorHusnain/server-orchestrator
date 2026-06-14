@@ -6,25 +6,30 @@ architecture: x86
 
 # Package sets per desktop environment. Selected by `desktop_env`.
 #
-# GNOME: gnome-session-flashback is chosen over ubuntu-desktop-minimal because
-# it does NOT pull in gdm3. On a headless server gdm3's postinst tries to start
-# a display manager and hangs indefinitely. gnome-session-flashback gives a
-# fully functional GNOME panel session that works reliably over xrdp.
+# GNOME: ubuntu-desktop provides the full ubuntu-xorg session type which is
+# required for xrdp to work correctly on Ubuntu 24.04. gnome-session-flashback
+# does NOT work — it lacks the ubuntu-xorg.session file that startwm.sh needs.
+# dbus-x11 provides dbus-launch (required by xrdp session startup).
+# xorgxrdp is the Xorg backend module for xrdp.
 #
-# XFCE: xfce4 + xfce4-goodies — the most xrdp-compatible desktop. Defaults to
-# Xorg (not Wayland), lightweight, fast to install (~3-5 min vs ~20 min GNOME).
+# XFCE: xfce4 + xfce4-goodies — most xrdp-compatible desktop. Uses Xorg by
+# default (no Wayland), lightweight, installs in ~3-5 minutes.
 desktop_packages:
   gnome:
-    - gnome-session-flashback
-    - gnome-terminal
-    - nautilus
-    - gnome-control-center
+    - ubuntu-desktop
+    - dbus-x11
+    - xorgxrdp
   xfce:
     - xfce4
     - xfce4-goodies
+    - dbus-x11
 
 # The session command xrdp launches for each desktop (consumed by the xrdp role
 # via the `desktop_session_command` fact set in tasks/main.yml).
+# GNOME: gnome-session --session=ubuntu uses the ubuntu-xorg session profile
+#        installed by ubuntu-desktop. This is the only session name that works
+#        correctly with xrdp on Ubuntu 24.04.
+# XFCE:  dbus-launch required for XFCE — without it the session exits instantly.
 desktop_session_commands:
-  gnome: "gnome-session-flashback-metacity"
-  xfce: "xfce4-session"
+  gnome: "gnome-session --session=ubuntu"
+  xfce: "dbus-launch --exit-with-session startxfce4"

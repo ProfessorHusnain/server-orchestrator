@@ -4,54 +4,56 @@
     that: desktop_env in ['gnome', 'xfce']
     fail_msg: "desktop_env must be 'gnome' or 'xfce', got '{{ desktop_env }}'"
 
-# Pre-seed lightdm as display manager BEFORE any desktop install.
-# Without this, dpkg prompts during install or gdm3 wins the DM selection,
-# causing the postinst to hang on a headless server.
-- name: Pre-seed lightdm as default display manager
+# Pre-seed gdm3 display manager selection BEFORE desktop install to prevent
+# the interactive DM selection prompt from hanging the install.
+- name: Pre-seed gdm3 as default display manager (GNOME)
+  ansible.builtin.debconf:
+    name: gdm3
+    question: shared/default-x-display-manager
+    value: gdm3
+    vtype: select
+  when: desktop_env == 'gnome'
+
+- name: Pre-seed lightdm as default display manager (XFCE)
   ansible.builtin.debconf:
     name: lightdm
     question: shared/default-x-display-manager
     value: lightdm
     vtype: select
-
-- name: Write default display manager config
-  ansible.builtin.copy:
-    content: "/usr/sbin/lightdm\n"
-    dest: /etc/X11/default-display-manager
-    mode: "0644"
-
-# Mask gdm3 before the desktop install so its postinst script cannot start
-# the display manager service on this headless server (no GPU, no display).
-# This is the key step — DEBIAN_FRONTEND=noninteractive alone does not stop
-# gdm3 from attempting to start and hanging.
-- name: Mask gdm3 to prevent headless postinst hang
-  ansible.builtin.systemd:
-    name: gdm3
-    masked: true
-  ignore_errors: true
-
-- name: Install display manager (lightdm)
-  ansible.builtin.apt:
-    name:
-      - lightdm
-      - lightdm-gtk-greeter
-    state: present
-    update_cache: true
-  environment:
-    DEBIAN_FRONTEND: noninteractive
-    NEEDRESTART_MODE: "a"
+  when: desktop_env == 'xfce'
 
 - name: Install selected desktop environment ({{ desktop_env }})
   ansible.builtin.apt:
     name: "{{ desktop_packages[desktop_env] }}"
     state: present
-    install_recommends: false
+    update_cache: true
     dpkg_options: "force-confdef,force-confold"
   environment:
     DEBIAN_FRONTEND: noninteractive
     NEEDRESTART_MODE: "a"
   async: 1800
   poll: 30
+
+# GNOME ships gnome-remote-desktop which binds port 3389 — same as xrdp.
+# Disable and mask it so xrdp owns the port exclusively.
+- name: Disable gnome-remote-desktop (conflicts with xrdp on port 3389)
+  ansible.builtin.systemd:
+    name: gnome-remote-desktop
+    enabled: false
+    masked: true
+    state: stopped
+  ignore_errors: true
+  when: desktop_env == 'gnome'
+
+# Disable Wayland in GDM — xrdp requires X11 sessions.
+- name: Disable Wayland in GDM config
+  ansible.builtin.lineinfile:
+    path: /etc/gdm3/custom.conf
+    regexp: '^#?WaylandEnable'
+    line: 'WaylandEnable=false'
+    insertafter: '\[daemon\]'
+  ignore_errors: true
+  when: desktop_env == 'gnome'
 
 - name: Set default systemd target to graphical
   ansible.builtin.command: systemctl set-default graphical.target
